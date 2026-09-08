@@ -18,7 +18,7 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
     const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (link) {
       const [, label, href] = link
-      const linkStyle: React.CSSProperties = { color: 'var(--amber)', borderBottom: '1px solid var(--amber)', paddingBottom: 1 }
+      const linkStyle: React.CSSProperties = { color: '#000', borderBottom: '1px solid rgba(0,0,0,0.3)', paddingBottom: 1 }
       if (href.startsWith('/')) {
         out.push(
           <Link key={key} href={href} style={linkStyle}>
@@ -41,7 +41,7 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
     }
     if (part.startsWith('**') && part.endsWith('**')) {
       out.push(
-        <strong key={key} style={{ color: 'var(--dusk-ink)', fontWeight: 600 }}>
+        <strong key={key} style={{ color: '#000', fontWeight: 600 }}>
           {renderInline(part.slice(2, -2), key)}
         </strong>
       )
@@ -49,7 +49,7 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
     }
     if (part.startsWith('`') && part.endsWith('`')) {
       out.push(
-        <code key={key} className="mono" style={{ fontSize: '0.88em', background: 'var(--dusk-800)', border: '1px solid var(--dusk-rule)', borderRadius: 4, padding: '1px 5px' }}>
+        <code key={key} className="mono" style={{ fontSize: '0.88em', background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 4, padding: '1px 5px' }}>
           {part.slice(1, -1)}
         </code>
       )
@@ -127,19 +127,19 @@ export function LegalArticle({ markdown }: { markdown: string }) {
         switch (b.kind) {
           case 'h1':
             return (
-              <h1 key={key} style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(30px, 4.5vw, 44px)', letterSpacing: '-0.015em', lineHeight: 1.15, color: 'var(--dusk-ink)' }}>
+              <h1 key={key} style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 'clamp(30px, 4.5vw, 44px)', letterSpacing: '-0.015em', lineHeight: 1.15, color: '#000' }}>
                 {renderInline(b.text, key)}
               </h1>
             )
           case 'h2':
             return (
-              <h2 key={key} style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 24, letterSpacing: '-0.01em', color: 'var(--dusk-ink)', marginTop: 40 }}>
+              <h2 key={key} style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 24, letterSpacing: '-0.01em', color: '#000', marginTop: 40 }}>
                 {renderInline(b.text, key)}
               </h2>
             )
           case 'h3':
             return (
-              <h3 key={key} style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18, color: 'var(--dusk-ink)', marginTop: 28 }}>
+              <h3 key={key} style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 18, color: '#000', marginTop: 28 }}>
                 {renderInline(b.text, key)}
               </h3>
             )
@@ -147,17 +147,17 @@ export function LegalArticle({ markdown }: { markdown: string }) {
             return (
               <ul key={key} style={{ margin: '14px 0 0 2px', padding: '0 0 0 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {b.items.map((item, j) => (
-                  <li key={`${key}-${j}`} style={{ fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.65, color: 'var(--dusk-ink-mid)' }}>
+                  <li key={`${key}-${j}`} style={{ fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.65, color: 'rgba(0,0,0,0.5)' }}>
                     {renderInline(item, `${key}-${j}`)}
                   </li>
                 ))}
               </ul>
             )
           case 'hr':
-            return <hr key={key} style={{ border: 'none', borderTop: '1px solid var(--dusk-rule)', margin: '36px 0' }} />
+            return <hr key={key} style={{ border: 'none', borderTop: '1px solid rgba(0,0,0,0.08)', margin: '36px 0' }} />
           case 'p':
             return (
-              <p key={key} style={{ fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.65, color: 'var(--dusk-ink-mid)', marginTop: 14 }}>
+              <p key={key} style={{ fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.65, color: 'rgba(0,0,0,0.5)', marginTop: 14 }}>
                 {renderInline(b.text, key)}
               </p>
             )
@@ -176,15 +176,15 @@ export function DraftNotice() {
       style={{
         maxWidth: '68ch',
         margin: '22px 0 6px',
-        border: '1px dashed var(--dusk-rule)',
+        border: '1px dashed rgba(0,0,0,0.2)',
         borderRadius: 10,
         padding: '12px 16px',
         fontFamily: 'var(--font-mono)',
         fontSize: 11,
         lineHeight: 1.6,
         letterSpacing: '0.04em',
-        color: 'var(--dusk-ink-subtle)',
-        background: 'var(--dusk-800)',
+        color: 'rgba(0,0,0,0.5)',
+        background: 'rgba(0,0,0,0.03)',
       }}
     >
       WORKING DRAFT · This document is under legal review. Its substance

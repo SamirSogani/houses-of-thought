@@ -10,27 +10,26 @@ const roster: { name: string; topic: string; score: number | null; color: string
 
 export default function EducatorHeroSection() {
   return (
-    <section style={{ background: 'var(--parchment)', paddingBlock: 'var(--hero-py)' }}>
+    <section style={{ background: '#fff', paddingBlock: 'var(--hero-py)' }}>
       <div
         className="container"
         style={{ display: 'flex', flexWrap: 'wrap', gap: 'clamp(40px, 5vw, 72px)', alignItems: 'center' }}
       >
         <div style={{ flex: '1 1 380px', minWidth: 'min(300px, 100%)' }} data-reveal>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ display: 'block', width: 24, height: 1, background: 'var(--amber)' }} />
-            <span className="eyebrow">Sheet 03 / For educators</span>
-          </div>
+          <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)' }}>
+            For educators
+          </p>
 
           <h1
             style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 500,
+              fontFamily: 'var(--font-serif)',
+              fontWeight: 400,
               fontSize: 'clamp(40px, 6vw, 66px)',
               lineHeight: 1.05,
               letterSpacing: '-0.015em',
               maxWidth: '14ch',
               marginTop: 20,
-              color: 'var(--ink)',
+              color: '#000',
             }}
           >
             Make critical thinking visible.
@@ -41,7 +40,7 @@ export default function EducatorHeroSection() {
               fontFamily: 'var(--font-body)',
               fontSize: 'clamp(17px, 1.6vw, 19px)',
               lineHeight: 1.6,
-              color: 'var(--ink-mid)',
+              color: 'rgba(0,0,0,0.5)',
               maxWidth: '44ch',
               marginTop: 20,
             }}
@@ -52,26 +51,31 @@ export default function EducatorHeroSection() {
           </p>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 32 }}>
-            <Link href="/login?mode=signup&role=educator" className="btn-primary">
+            <Link
+              href="/login?mode=signup&role=educator"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 52, padding: '0 26px', background: '#000', color: '#fff', fontWeight: 600, fontSize: 16, borderRadius: 999 }}
+            >
               Create a classroom <ArrowIcon />
             </Link>
-            <Link href="/try" className="btn-secondary">
+            <Link
+              href="/try"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 52, padding: '0 24px', border: '1px solid rgba(0,0,0,0.15)', color: '#000', fontWeight: 600, fontSize: 16, borderRadius: 999 }}
+            >
               Try it yourself
             </Link>
           </div>
         </div>
 
         <div style={{ flex: '1 1 380px', minWidth: 'min(300px, 100%)', maxWidth: 480 }} data-reveal>
-          <div style={{ background: 'var(--white)', border: '1px solid var(--rule)', borderRadius: 12, padding: 22 }}>
+          <div style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, padding: 22 }}>
             <div
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontFamily: 'var(--font-mono)',
                 fontSize: 11,
                 textTransform: 'uppercase',
                 letterSpacing: '0.1em',
-                color: 'var(--ink-subtle)',
+                color: 'rgba(0,0,0,0.35)',
                 marginBottom: 16,
               }}
             >
@@ -87,25 +91,25 @@ export default function EducatorHeroSection() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 14,
-                    background: 'var(--parchment)',
-                    border: '1px solid var(--rule)',
+                    background: 'rgba(0,0,0,0.02)',
+                    border: '1px solid rgba(0,0,0,0.08)',
                     borderRadius: 8,
                     padding: '12px 14px',
                   }}
                 >
-                  <span style={{ fontFamily: 'var(--font-body)', fontWeight: 500, fontSize: 14, color: 'var(--ink)', minWidth: 72 }}>
+                  <span style={{ fontFamily: 'var(--font-body)', fontWeight: 500, fontSize: 14, color: '#000', minWidth: 72 }}>
                     {s.name}
                   </span>
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--ink-subtle)', flex: 1 }}>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'rgba(0,0,0,0.35)', flex: 1 }}>
                     {s.topic}
                   </span>
                   {s.score !== null ? (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: s.color }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: s.color }}>
                       <span style={{ width: 8, height: 8, borderRadius: 2, background: s.color }} />
                       {s.score}
                     </span>
                   ) : (
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: s.color }}>···</span>
+                    <span style={{ fontSize: 11, color: s.color }}>···</span>
                   )}
                 </div>
               ))}
@@ -115,9 +119,8 @@ export default function EducatorHeroSection() {
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontFamily: 'var(--font-mono)',
                 fontSize: 11,
-                color: 'var(--ink-subtle)',
+                color: 'rgba(0,0,0,0.35)',
                 marginTop: 16,
               }}
             >

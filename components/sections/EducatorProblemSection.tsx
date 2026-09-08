@@ -19,32 +19,34 @@ const columns = [
 export default function EducatorProblemSection() {
   return (
     <section
-      style={{ background: 'var(--white)', borderTop: '1px solid var(--rule)', paddingBlock: 'var(--section-py)' }}
+      style={{ background: '#fff', borderTop: '1px solid rgba(0,0,0,0.08)', paddingBlock: 'var(--section-py)' }}
     >
       <div className="container" data-reveal>
-        <p className="eyebrow">The problem you already feel</p>
-        <h2 className="h2" style={{ marginTop: 16, maxWidth: '24ch' }}>
+        <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)' }}>
+          The problem you already feel
+        </p>
+        <h2 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 'clamp(30px, 4vw, 48px)', lineHeight: 1.1, marginTop: 16, maxWidth: '24ch' }}>
           The answer looks fine. The thinking is a black box.
         </h2>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, marginTop: 44 }}>
           {columns.map((c) => (
-            <div key={c.letter} style={{ flex: '1 1 260px', borderTop: '2px solid var(--ink)', paddingTop: 20 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--amber-text)' }}>
+            <div key={c.letter} style={{ flex: '1 1 260px', borderTop: '2px solid #000', paddingTop: 20 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(0,0,0,0.35)' }}>
                 {c.letter}
               </span>
               <h3
                 style={{
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 500,
+                  fontFamily: 'var(--font-serif)',
+                  fontWeight: 400,
                   fontSize: 21,
-                  color: 'var(--ink)',
+                  color: '#000',
                   marginTop: 12,
                 }}
               >
                 {c.title}
               </h3>
-              <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.6, color: 'var(--ink-mid)', marginTop: 10 }}>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.6, color: 'rgba(0,0,0,0.5)', marginTop: 10 }}>
                 {c.body}
               </p>
             </div>

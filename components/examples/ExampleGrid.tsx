@@ -115,8 +115,8 @@ function ExampleCard({ example }: { example: ExampleHouse }) {
       {/* Question */}
       <h3
         style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 500,
+          fontFamily: 'var(--font-serif)',
+          fontWeight: 400,
           fontSize: 21,
           letterSpacing: '-0.01em',
           color: 'var(--ink)',

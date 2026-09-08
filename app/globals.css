@@ -36,52 +36,15 @@
   --radius-chip: 5px;
   --radius-btn: 8px;
 
-  /* ── Dusk constellation (pre-login redesign) ──────────────────────────
-     A second, additive palette for the pre-login marketing surface only.
-     Nothing above this line changes value — the post-login app (dashboard,
-     build, classroom) and the For Educators route keep reading the parchment
-     tokens exactly as before. Pre-login pages layer this palette on top:
-     a dusk sky for chrome and narrative sections, with the existing
-     parchment/white "paper" tokens kept for dense reused content (evidence
-     rows, strength bars, legal text, form fields) that already assumes a
-     light surface and isn't safe to recolor piecemeal.
-
-     Contrast checked against the two backgrounds actually used:
-     --dusk-950 (#060814) and --dusk-900 (#0B0F22).
-       --dusk-ink        ~17:1 / ~16:1
-       --dusk-ink-mid    ~10:1 / ~9:1
-       --dusk-ink-subtle ~6.3:1 / ~5.8:1
-       --amber (existing token, unchanged) ~10.6:1 on both — the codebase
-         already documents amber as ink-surface-safe (globals.css a11y note),
-         so the warm "node" color needs no new token.
-       --standard-cool   ~11.8:1 / ~11:1 */
-  --dusk-950: #060814;
-  --dusk-900: #0b0f22;
-  --dusk-800: #121a37;
-  --dusk-700: #1b2547;
-  --dusk-bg-gradient: radial-gradient(120% 70% at 50% -12%, #17224a 0%, #0b0f22 48%, #060814 100%);
-  --dusk-card: rgba(18, 26, 55, 0.72);
-  --dusk-rule: #2b3760;
-  --dusk-rule-soft: #1a2140;
-  --dusk-ink: #f4f5fb;
-  --dusk-ink-mid: #c7cee6;
-  --dusk-ink-subtle: #98a1c7;
-
-  /* The "checking" accent — deliberately cooler than the warm amber "doing"
-     color, so a standards-mark reads as a different kind of thing from a
-     node lighting up (visual design brief: "the system doing the work" vs
-     "the system checking its own work"). */
-  --standard-cool: #6fe7db;
-  --standard-cool-strong: #38c7bc;
-  --standard-cool-soft: rgba(111, 231, 219, 0.16);
-
-  /* A failed standard pulses this color before resolving to --standard-cool
-     (diegetic motion: a real loop-and-retry, not decoration). */
-  --dusk-retry: #f2795c;
-
   /* ── Homepage redesign (monochrome) ──────────────────────────────────
-     Used only on the marketing homepage (app/page.tsx). All existing
-     parchment/dusk tokens stay — sub-pages and post-login still use them. */
+     Now the palette for every pre-login page (prelogin-consistency.md):
+     sub-pages, the educators page, and auth all converged to this white/
+     black/gray system, so the "dusk constellation" palette that used to sit
+     here — a second dark palette layered on the pre-login surface only —
+     was removed as dead: nothing outside two orphaned, unimported marketing
+     components (components/marketing/{SocialProof,DiagramTeaser,TryFlow}.tsx)
+     still referenced it. Post-login (dashboard, build, classroom, profile)
+     and the parchment tokens above are unaffected either way. */
   --font-serif: var(--font-instrument-serif), 'Instrument Serif', Georgia, serif;
   --hp-bg: #fff;
   --hp-text: #000;

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { AuthCard, AuthDivider, AuthError, AuthField } from '@/components/auth/AuthCard'
+import { AuthCard, AuthDivider, AuthError, AuthField, authButtonStyle, authButtonSecondaryStyle } from '@/components/auth/AuthCard'
 import { AccountTypeSelector } from '@/components/profile/AccountTypeSelector'
 import type { AccountType } from '@/lib/profile/data'
 
@@ -105,8 +105,7 @@ export default function LoginPage() {
         </p>
         <button
           type="button"
-          className="btn-primary"
-          style={{ width: '100%', justifyContent: 'center', marginTop: 24 }}
+          style={{ ...authButtonStyle, width: '100%', marginTop: 24 }}
           onClick={() => {
             setConfirmEmail(null)
             setMode('login')
@@ -127,11 +126,10 @@ export default function LoginPage() {
           style={{
             marginTop: 20,
             textAlign: 'center',
-            fontFamily: 'var(--font-mono)',
             fontSize: 11,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
-            color: 'var(--dusk-ink-subtle)',
+            color: 'rgba(0,0,0,0.35)',
           }}
         >
           Your reasoning stays yours
@@ -182,8 +180,7 @@ export default function LoginPage() {
          the button will show a Supabase error. */}
       <button
         type="button"
-        className="btn-secondary"
-        style={{ width: '100%', justifyContent: 'center', gap: 10 }}
+        style={{ ...authButtonSecondaryStyle, width: '100%', gap: 10 }}
         onClick={async () => {
           setError(null)
           const supabase = createClient()
@@ -272,11 +269,10 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          className="btn-primary"
           disabled={loading}
           style={{
+            ...authButtonStyle,
             width: '100%',
-            justifyContent: 'center',
             marginTop: 8,
             opacity: loading ? 0.6 : 1,
             cursor: loading ? 'default' : 'pointer',

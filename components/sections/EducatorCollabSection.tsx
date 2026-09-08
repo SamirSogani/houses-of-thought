@@ -1,7 +1,7 @@
 export default function EducatorCollabSection() {
   return (
     <section
-      style={{ background: 'var(--parchment)', borderTop: '1px solid var(--rule)', paddingBlock: 'var(--section-py)' }}
+      style={{ background: 'rgba(0,0,0,0.02)', borderTop: '1px solid rgba(0,0,0,0.08)', paddingBlock: 'var(--section-py)' }}
     >
       <div
         className="container"
@@ -9,14 +9,16 @@ export default function EducatorCollabSection() {
         data-reveal
       >
         <div style={{ flex: '1 1 320px' }}>
-          <p className="eyebrow">Collaboration</p>
-          <h2 className="h2" style={{ marginTop: 16, fontSize: 'clamp(26px, 3vw, 36px)', maxWidth: '18ch' }}>
+          <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)' }}>
+            Collaboration
+          </p>
+          <h2 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 'clamp(26px, 3vw, 36px)', lineHeight: 1.15, marginTop: 16, maxWidth: '18ch' }}>
             Real people reasoning together.
           </h2>
         </div>
 
         <div style={{ flex: '1 1 380px' }}>
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: 17, lineHeight: 1.6, color: 'var(--ink-mid)', maxWidth: '56ch' }}>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: 17, lineHeight: 1.6, color: 'rgba(0,0,0,0.5)', maxWidth: '56ch' }}>
             Inside classrooms, collaboration means real people: teachers review
             submitted houses and leave graded feedback students see in their own
             workspace. That&rsquo;s distinct from the individual builder, where
@@ -27,7 +29,6 @@ export default function EducatorCollabSection() {
             style={{
               display: 'inline-block',
               marginTop: 16,
-              fontFamily: 'var(--font-mono)',
               fontSize: 11,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',

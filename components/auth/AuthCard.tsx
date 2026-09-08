@@ -2,10 +2,10 @@ import type { ReactNode } from 'react'
 import MarketingHeader from '@/components/marketing/Header'
 
 // Shared scaffold for the auth pages (login, forgot-password, reset-password):
-// the site header, the centered dusk stage, the eyebrow + display heading, and
-// a "paper" card that holds the form. Login/signup is a genuinely pre-login
-// surface, so this uses the new marketing header — but the form CARD itself
-// stays on the light --white/--ink tokens the form fields and
+// the site header, the centered white stage, the eyebrow + display heading,
+// and a bordered card that holds the form. Login/signup is a genuinely
+// pre-login surface, so this uses the shared marketing header — but the form
+// CARD itself stays on the light --white/--ink tokens the form fields and
 // AccountTypeSelector already assume (AccountTypeSelector is also rendered,
 // read-only, on the post-login Profile page — it isn't safe to recolor).
 // `children` render inside the card; `belowCard` renders beneath it.
@@ -21,8 +21,8 @@ export function AuthCard({
   belowCard?: ReactNode
 }) {
   return (
-    <div className="dusk-page">
-      <MarketingHeader />
+    <div style={{ background: '#fff', color: '#000', minHeight: '100vh' }}>
+      <MarketingHeader variant="subpage" />
 
       {/* acct-vh-header = dvh-safe `calc(100vh - 73px)` (account-responsive.css). */}
       <main
@@ -36,20 +36,19 @@ export function AuthCard({
       >
         <div style={{ width: '100%', maxWidth: 420 }}>
           {/* Eyebrow */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-            <span style={{ display: 'block', width: 24, height: 1, background: 'var(--amber)' }} />
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--amber)' }}>{eyebrow}</span>
-          </div>
+          <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)', marginBottom: 20 }}>
+            {eyebrow}
+          </p>
 
           {/* Heading */}
           <h1
             style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 500,
+              fontFamily: 'var(--font-serif)',
+              fontWeight: 400,
               fontSize: 'clamp(32px, 5vw, 44px)',
               lineHeight: 1.08,
               letterSpacing: '-0.015em',
-              color: 'var(--dusk-ink)',
+              color: '#000',
               marginBottom: 32,
             }}
           >
@@ -57,7 +56,7 @@ export function AuthCard({
           </h1>
 
           {/* Card */}
-          <div className="paper-card" style={{ padding: 'clamp(24px, 4vw, 36px)' }}>
+          <div style={{ padding: 'clamp(24px, 4vw, 36px)', background: '#fff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 'var(--radius-card)' }}>
             {children}
           </div>
 
@@ -66,6 +65,40 @@ export function AuthCard({
       </main>
     </div>
   )
+}
+
+// Shared black-pill / outlined button styles for the auth pages, replacing
+// the sitewide .btn-primary/.btn-secondary (amber) classes — those stay
+// amber for post-login pages, so auth's own buttons are styled locally.
+export const authButtonStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  height: 48,
+  padding: '0 20px',
+  background: '#000',
+  color: '#fff',
+  fontFamily: 'var(--font-body)',
+  fontWeight: 600,
+  fontSize: 15,
+  borderRadius: 8,
+}
+
+export const authButtonSecondaryStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  height: 48,
+  padding: '0 20px',
+  border: '1px solid rgba(0,0,0,0.15)',
+  background: 'transparent',
+  color: '#000',
+  fontFamily: 'var(--font-body)',
+  fontWeight: 600,
+  fontSize: 15,
+  borderRadius: 8,
 }
 
 export const authInputStyle: React.CSSProperties = {

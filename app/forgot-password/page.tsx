@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { AuthCard, AuthDivider, AuthError, AuthField } from '@/components/auth/AuthCard'
+import { AuthCard, AuthDivider, AuthError, AuthField, authButtonStyle } from '@/components/auth/AuthCard'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -87,11 +87,10 @@ export default function ForgotPasswordPage() {
 
           <button
             type="submit"
-            className="btn-primary"
             disabled={loading}
             style={{
+              ...authButtonStyle,
               width: '100%',
-              justifyContent: 'center',
               marginTop: 8,
               opacity: loading ? 0.6 : 1,
               cursor: loading ? 'default' : 'pointer',

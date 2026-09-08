@@ -18,8 +18,8 @@ function AccordionItem({
   return (
     <div
       style={{
-        borderTop: '1px solid var(--rule)',
-        borderBottom: isLast ? '1px solid var(--rule)' : undefined,
+        borderTop: '1px solid rgba(0,0,0,0.08)',
+        borderBottom: isLast ? '1px solid rgba(0,0,0,0.08)' : undefined,
       }}
     >
       <button
@@ -37,17 +37,17 @@ function AccordionItem({
       >
         <span
           style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 500,
+            fontFamily: 'var(--font-serif)',
+            fontWeight: 400,
             fontSize: 20,
-            color: 'var(--ink)',
+            color: '#000',
           }}
         >
           {item.question}
         </span>
         <span
           style={{
-            color: 'var(--ink-subtle)',
+            color: 'rgba(0,0,0,0.35)',
             flexShrink: 0,
             transform: open ? 'rotate(180deg)' : 'none',
             transition: 'transform 0.24s',
@@ -67,7 +67,7 @@ function AccordionItem({
             fontFamily: 'var(--font-body)',
             fontSize: 16,
             lineHeight: 1.65,
-            color: 'var(--ink-mid)',
+            color: 'rgba(0,0,0,0.5)',
             maxWidth: '64ch',
           }}
         >
@@ -82,19 +82,26 @@ export default function FaqGroupsSection() {
   return (
     <section style={{ paddingBlock: 0 }}>
       <div
-        className="container paper-card"
-        style={{ maxWidth: 820, padding: 'clamp(28px, 4vw, 48px)', display: 'flex', flexDirection: 'column', gap: 56 }}
+        className="container"
+        style={{
+          maxWidth: 820,
+          borderTop: '1px solid rgba(0,0,0,0.08)',
+          paddingTop: 'clamp(40px, 6vw, 64px)',
+          paddingBottom: 'clamp(56px, 9vw, 96px)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 56,
+        }}
       >
         {groups.map((group) => (
           <div key={group.label} data-reveal>
             <p
               style={{
-                fontFamily: 'var(--font-mono)',
                 fontSize: 12,
                 fontWeight: 500,
                 letterSpacing: '0.12em',
                 textTransform: 'uppercase',
-                color: 'var(--amber-text)',
+                color: 'rgba(0,0,0,0.35)',
                 marginBottom: 8,
               }}
             >

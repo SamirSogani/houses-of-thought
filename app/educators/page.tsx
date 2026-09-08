@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { pageMetadata } from '@/lib/site'
-import Header from '@/components/Header'
-import SheetStrip from '@/components/SheetStrip'
+import Header from '@/components/marketing/Header'
 import ScrollRevealInit from '@/components/ScrollReveal'
 import EducatorHeroSection from '@/components/sections/EducatorHeroSection'
 import EducatorProblemSection from '@/components/sections/EducatorProblemSection'
@@ -9,8 +8,8 @@ import EducatorClassroomSection from '@/components/sections/EducatorClassroomSec
 import EducatorDifferenceSection from '@/components/sections/EducatorDifferenceSection'
 import EducatorCollabSection from '@/components/sections/EducatorCollabSection'
 import EducatorTrustSection from '@/components/sections/EducatorTrustSection'
-import CTASection from '@/components/sections/CTASection'
-import Footer from '@/components/sections/Footer'
+import CTASection from '@/components/marketing/CTASection'
+import Footer from '@/components/marketing/Footer'
 
 export const metadata: Metadata = pageMetadata({
   title: 'Critical Thinking for Classrooms',
@@ -22,10 +21,9 @@ export const metadata: Metadata = pageMetadata({
 
 export default function EducatorsPage() {
   return (
-    <>
+    <div style={{ background: '#fff', color: '#000' }}>
       <ScrollRevealInit />
-      <Header />
-      <SheetStrip sheet="Sheet 03 / For educators" />
+      <Header variant="subpage" />
       <main id="main">
         <EducatorHeroSection />
         <EducatorProblemSection />
@@ -44,6 +42,6 @@ export default function EducatorsPage() {
         />
       </main>
       <Footer />
-    </>
+    </div>
   )
 }

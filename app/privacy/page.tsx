@@ -6,8 +6,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { Metadata } from 'next'
 import { pageMetadata } from '@/lib/site'
-import MarketingHeader from '@/components/marketing/DuskHeader'
-import MarketingFooter from '@/components/marketing/DuskFooter'
+import MarketingHeader from '@/components/marketing/Header'
+import MarketingFooter from '@/components/marketing/Footer'
 import { LegalArticle, DraftNotice } from '@/components/legal/LegalArticle'
 
 export const metadata: Metadata = pageMetadata({
@@ -20,8 +20,8 @@ export const metadata: Metadata = pageMetadata({
 export default function PrivacyPage() {
   const markdown = fs.readFileSync(path.join(process.cwd(), 'legal', 'PRIVACY_POLICY.md'), 'utf8')
   return (
-    <div className="dusk-page">
-      <MarketingHeader />
+    <div style={{ background: '#fff', color: '#000' }}>
+      <MarketingHeader variant="subpage" />
       <main id="main">
         <section style={{ paddingBlock: 'clamp(36px, 5vw, 64px)' }}>
           <div className="container">

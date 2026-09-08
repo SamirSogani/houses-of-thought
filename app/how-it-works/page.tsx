@@ -16,9 +16,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { pageMetadata } from '@/lib/site'
-import MarketingHeader from '@/components/marketing/DuskHeader'
-import MarketingFooter from '@/components/marketing/DuskFooter'
-import MarketingCTASection from '@/components/marketing/DuskCTASection'
+import MarketingHeader from '@/components/marketing/Header'
+import MarketingFooter from '@/components/marketing/Footer'
+import MarketingCTASection from '@/components/marketing/CTASection'
 import Constellation from '@/components/marketing/Constellation'
 import DemoVideo from '@/components/marketing/DemoVideo'
 import { CONSTELLATION_LAYERS, CONSTELLATION_STANDARDS } from '@/lib/marketing/constellation'
@@ -68,8 +68,8 @@ const jsonLd = {
 
 export default function HowItWorksPage() {
   return (
-    <div className="dusk-page">
-      <MarketingHeader />
+    <div style={{ background: '#fff', color: '#000' }}>
+      <MarketingHeader variant="subpage" />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <main id="main">
         {/* TL;DR callout — the three-sentence summary a scanning visitor reads
@@ -78,8 +78,8 @@ export default function HowItWorksPage() {
           <div className="container">
             <div
               style={{
-                background: 'var(--dusk-rule-soft)',
-                borderLeft: '4px solid var(--amber)',
+                background: 'rgba(0,0,0,0.03)',
+                borderLeft: '4px solid #000',
                 borderRadius: '0 14px 14px 0',
                 padding: 'clamp(24px, 4vw, 36px)',
                 maxWidth: '56ch',
@@ -87,12 +87,12 @@ export default function HowItWorksPage() {
             >
               <p
                 style={{
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 500,
+                  fontFamily: 'var(--font-serif)',
+                  fontWeight: 400,
                   fontSize: 'clamp(20px, 2.8vw, 26px)',
                   lineHeight: 1.4,
                   letterSpacing: '-0.01em',
-                  color: 'var(--dusk-ink)',
+                  color: '#000',
                   margin: 0,
                 }}
               >
@@ -106,13 +106,13 @@ export default function HowItWorksPage() {
         <section style={{ paddingBlock: 'clamp(56px, 9vw, 100px)' }}>
           <div className="container">
             <div style={{ maxWidth: '62ch' }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--amber)' }}>
+              <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)' }}>
                 How it works
               </p>
-              <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(34px, 5.4vw, 58px)', lineHeight: 1.08, letterSpacing: '-0.015em', color: 'var(--dusk-ink)', marginTop: 16 }}>
+              <h1 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 'clamp(34px, 5.4vw, 58px)', lineHeight: 1.08, letterSpacing: '-0.015em', color: '#000', marginTop: 16 }}>
                 Seven layers. One at a time. Nothing skipped.
               </h1>
-              <p style={{ fontFamily: 'var(--font-body)', fontSize: 17, lineHeight: 1.6, color: 'var(--dusk-ink-mid)', marginTop: 18 }}>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: 17, lineHeight: 1.6, color: 'rgba(0,0,0,0.5)', marginTop: 18 }}>
                 A Houses of Thought run walks the same seven layers every time, based on
                 John Trapasso&rsquo;s classroom model, derived from the Paul&ndash;Elder
                 framework for critical thinking. Six of the seven are checked by a panel
@@ -129,13 +129,13 @@ export default function HowItWorksPage() {
         </section>
 
         {/* Demo video — placeholder until a real recording is ready */}
-        <section style={{ paddingBlock: 'var(--section-py)', borderTop: '1px solid var(--dusk-rule)' }}>
+        <section style={{ paddingBlock: 'var(--section-py)', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
           <div className="container">
             <div style={{ maxWidth: '52ch' }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--amber)' }}>
+              <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)' }}>
                 Watch it work
               </p>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(24px, 3vw, 32px)', color: 'var(--dusk-ink)', marginTop: 10 }}>
+              <h2 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 'clamp(24px, 3vw, 32px)', color: '#000', marginTop: 10 }}>
                 A full house, built start to finish.
               </h2>
             </div>
@@ -145,12 +145,12 @@ export default function HowItWorksPage() {
           </div>
         </section>
 
-        <section style={{ paddingBlock: 'var(--section-py)', borderTop: '1px solid var(--dusk-rule)' }}>
+        <section style={{ paddingBlock: 'var(--section-py)', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
           <div className="container" style={{ maxWidth: '68ch' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(24px, 3vw, 32px)', color: 'var(--dusk-ink)' }}>
+            <h2 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 'clamp(24px, 3vw, 32px)', color: '#000' }}>
               Why a panel, and why nine standards?
             </h2>
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.65, color: 'var(--dusk-ink-mid)', marginTop: 14 }}>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.65, color: 'rgba(0,0,0,0.5)', marginTop: 14 }}>
               The nine standards are Paul and Elder&rsquo;s Universal Intellectual
               Standards, the same nine a critical-thinking classroom would apply by hand.
               Each one is graded by its own independent reviewer, seeing only its own
@@ -159,7 +159,7 @@ export default function HowItWorksPage() {
               layer can only fairly be graded against what it is actually trying to do.
               The full glossary, including that per-layer nuance, is below.
             </p>
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.65, color: 'var(--dusk-ink-mid)', marginTop: 14 }}>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.65, color: 'rgba(0,0,0,0.5)', marginTop: 14 }}>
               A layer that fails a standard doesn&rsquo;t quietly pass anyway. It loops and
               redoes the work. Frame, Global Assumptions, Global Evidence, Conclusions,
               and Implications hold the whole run until they pass, since nothing else
@@ -175,7 +175,7 @@ export default function HowItWorksPage() {
             write-up further down the page. */}
         <section id="layer-table" style={{ paddingBlock: '0 var(--section-py)', scrollMarginTop: 84 }}>
           <div className="container">
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--dusk-ink-subtle)', marginBottom: 16 }}>
+            <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'rgba(0,0,0,0.35)', marginBottom: 16 }}>
               The seven layers, compared
             </p>
             <div className="table-scroll">
@@ -193,13 +193,13 @@ export default function HowItWorksPage() {
                     return (
                       <tr key={layer.id}>
                         <td style={{ ...howTdStyle, whiteSpace: 'nowrap' }}>
-                          <a href={`#layer-${layer.id}`} style={{ color: 'var(--dusk-ink)', fontWeight: 600, borderBottom: '1px solid var(--dusk-rule)' }}>
+                          <a href={`#layer-${layer.id}`} style={{ color: '#000', fontWeight: 600, borderBottom: '1px solid rgba(0,0,0,0.2)' }}>
                             {i + 1}. {layer.name}
                           </a>
                         </td>
                         <td style={howTdStyle}>{layer.hasPanel ? 'Nine independent standards' : 'None'}</td>
                         <td style={howTdStyle}>
-                          <strong style={{ color: 'var(--dusk-ink)', fontWeight: 600 }}>{mode.label}.</strong> {mode.body}
+                          <strong style={{ color: '#000', fontWeight: 600 }}>{mode.label}.</strong> {mode.body}
                         </td>
                       </tr>
                     )
@@ -215,16 +215,16 @@ export default function HowItWorksPage() {
             documentation gloss) and the per-layer nuance (LAYER_STANDARD_
             CRITERIA, paraphrased) — neither is repeated in the diagram's
             click panel or in the in-depth layer write-ups below. */}
-        <section id="standards" style={{ paddingBlock: '0 var(--section-py)', borderTop: '1px solid var(--dusk-rule)', scrollMarginTop: 84 }}>
+        <section id="standards" style={{ paddingBlock: '0 var(--section-py)', borderTop: '1px solid rgba(0,0,0,0.08)', scrollMarginTop: 84 }}>
           <div className="container">
             <div style={{ maxWidth: '62ch' }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--dusk-ink-subtle)' }}>
+              <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'rgba(0,0,0,0.35)' }}>
                 The review panel
               </p>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(24px, 3vw, 32px)', color: 'var(--dusk-ink)', marginTop: 10 }}>
+              <h2 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 'clamp(24px, 3vw, 32px)', color: '#000', marginTop: 10 }}>
                 Meet the nine standards.
               </h2>
-              <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.6, color: 'var(--dusk-ink-mid)', marginTop: 12 }}>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.6, color: 'rgba(0,0,0,0.5)', marginTop: 12 }}>
                 Paul and Elder&rsquo;s Universal Intellectual Standards. Six of the seven
                 layers get graded against all nine. Open a standard below to see what it
                 specifically means at each of those six layers.
@@ -232,22 +232,22 @@ export default function HowItWorksPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 28 }}>
               {CONSTELLATION_STANDARDS.map((s) => (
-                <details key={s.id} className="dusk-card" style={{ padding: '16px 18px' }}>
+                <details key={s.id} style={{ padding: '16px 18px', background: '#fff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 'var(--radius-card)' }}>
                   <summary style={{ cursor: 'pointer', listStyle: 'none' }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--standard-cool)' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#000' }}>
                       {s.name}
                     </span>
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: 14.5, lineHeight: 1.5, color: 'var(--dusk-ink-mid)' }}>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: 14.5, lineHeight: 1.5, color: 'rgba(0,0,0,0.5)' }}>
                       : {s.definition}
                     </span>
                   </summary>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10, marginTop: 16 }}>
                     {PANELED_LAYERS.map((layer) => (
-                      <div key={layer.id} style={{ borderLeft: '2px solid var(--dusk-rule)', paddingLeft: 12 }}>
-                        <a href={`#layer-${layer.id}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--dusk-ink-subtle)' }}>
+                      <div key={layer.id} style={{ borderLeft: '2px solid rgba(0,0,0,0.15)', paddingLeft: 12 }}>
+                        <a href={`#layer-${layer.id}`} style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'rgba(0,0,0,0.35)' }}>
                           {layer.name}
                         </a>
-                        <p style={{ fontFamily: 'var(--font-body)', fontSize: 13.5, lineHeight: 1.5, color: 'var(--dusk-ink-mid)', marginTop: 4 }}>
+                        <p style={{ fontFamily: 'var(--font-body)', fontSize: 13.5, lineHeight: 1.5, color: 'rgba(0,0,0,0.5)', marginTop: 4 }}>
                           {layer.standardMeanings?.[s.id]}
                         </p>
                       </div>
@@ -262,9 +262,9 @@ export default function HowItWorksPage() {
         {/* In-depth, one section per layer — anchors matched by the table
             above and by the diagram's click panel. No standards content here
             by design (it lives solely in "Meet the nine standards" above). */}
-        <section style={{ paddingBlock: 'var(--section-py)', borderTop: '1px solid var(--dusk-rule)' }}>
+        <section style={{ paddingBlock: 'var(--section-py)', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
           <div className="container">
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--dusk-ink-subtle)', marginBottom: 8 }}>
+            <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'rgba(0,0,0,0.35)', marginBottom: 8 }}>
               In depth
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
@@ -273,42 +273,27 @@ export default function HowItWorksPage() {
                 return (
                   <article key={layer.id} id={`layer-${layer.id}`} style={{ scrollMarginTop: 84, maxWidth: '68ch' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'var(--amber)',
-                          color: 'var(--ink)',
-                          borderRadius: 4,
-                          minWidth: 26,
-                          height: 22,
-                          fontWeight: 600,
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 11,
-                          padding: '0 6px',
-                        }}
-                      >
+                      <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(0,0,0,0.25)' }}>
                         {String(i + 1).padStart(2, '0')}
                       </span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--dusk-ink-subtle)' }}>
+                      <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(0,0,0,0.35)' }}>
                         Layer {i + 1} of 7
                       </span>
                     </div>
-                    <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 26, color: 'var(--dusk-ink)', marginTop: 12 }}>
+                    <h3 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 26, color: '#000', marginTop: 12 }}>
                       {layer.name}
                     </h3>
-                    <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.65, color: 'var(--dusk-ink-mid)', marginTop: 10 }}>
+                    <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.65, color: 'rgba(0,0,0,0.5)', marginTop: 10 }}>
                       {layer.job}
                     </p>
-                    <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.65, color: 'var(--dusk-ink-mid)', marginTop: 12 }}>
+                    <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.65, color: 'rgba(0,0,0,0.5)', marginTop: 12 }}>
                       {layer.detail}
                     </p>
-                    <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.55, color: 'var(--dusk-ink-subtle)', marginTop: 14 }}>
+                    <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.55, color: 'rgba(0,0,0,0.35)', marginTop: 14 }}>
                       {layer.hasPanel ? (
                         <>
                           Checked by the nine-standard panel (see{' '}
-                          <a href="#standards" style={{ color: 'var(--amber)' }}>Meet the nine standards</a>). <strong style={{ color: 'var(--dusk-ink-mid)' }}>{mode.label}.</strong> {mode.body}
+                          <a href="#standards" style={{ color: '#000', borderBottom: '1px solid rgba(0,0,0,0.3)' }}>Meet the nine standards</a>). <strong style={{ color: 'rgba(0,0,0,0.5)' }}>{mode.label}.</strong> {mode.body}
                         </>
                       ) : (
                         <>No review panel. {mode.body}</>
@@ -318,7 +303,7 @@ export default function HowItWorksPage() {
                 )
               })}
             </div>
-            <a href="#main" style={{ display: 'inline-flex', marginTop: 32, fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--dusk-ink-subtle)' }}>
+            <a href="#main" style={{ display: 'inline-flex', marginTop: 32, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(0,0,0,0.35)' }}>
               ↑ Back to top
             </a>
           </div>
@@ -326,19 +311,19 @@ export default function HowItWorksPage() {
 
         {/* Credit — the deepest methodology content on the site should say
             plainly where the method comes from (redesign brief). */}
-        <section style={{ paddingBlock: '0 var(--section-py)', borderTop: '1px solid var(--dusk-rule)' }}>
+        <section style={{ paddingBlock: '0 var(--section-py)', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
           <div className="container">
-            <div className="dusk-card" style={{ padding: 'clamp(24px, 4vw, 40px)', display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ padding: 'clamp(24px, 4vw, 40px)', display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'center', justifyContent: 'space-between', background: '#fff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 'var(--radius-card)' }}>
               <div style={{ maxWidth: '52ch' }}>
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--amber)' }}>
+                <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'rgba(0,0,0,0.3)' }}>
                   Where this comes from
                 </p>
-                <p style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(19px, 2.2vw, 24px)', lineHeight: 1.35, color: 'var(--dusk-ink)', marginTop: 10 }}>
+                <p style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontWeight: 400, fontSize: 'clamp(19px, 2.2vw, 24px)', lineHeight: 1.35, color: '#000', marginTop: 10 }}>
                   This isn&rsquo;t a house style invented for an app. It&rsquo;s a real
                   classroom model, taught by a real teacher, built into software
                   because it worked on paper first.
                 </p>
-                <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.6, color: 'var(--dusk-ink-mid)', marginTop: 14 }}>
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.6, color: 'rgba(0,0,0,0.5)', marginTop: 14 }}>
                   The seven layers are John Trapasso&rsquo;s classroom framework; the nine
                   standards each layer is checked against are Richard Paul and Linda
                   Elder&rsquo;s Universal Intellectual Standards for critical thinking.
@@ -346,7 +331,7 @@ export default function HowItWorksPage() {
                   other way around.
                 </p>
               </div>
-              <Link href="/story" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 15, color: 'var(--amber)', whiteSpace: 'nowrap' }}>
+              <Link href="/story" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 15, color: '#000', borderBottom: '1px solid rgba(0,0,0,0.3)', whiteSpace: 'nowrap' }}>
                 Read the full story →
               </Link>
             </div>
@@ -356,7 +341,7 @@ export default function HowItWorksPage() {
         <MarketingCTASection
           eyebrow="See it for yourself"
           heading="Pick a question you can't crack."
-          primaryLabel="Try it instantly"
+          primaryLabel="Try it free"
           primaryHref="/try"
           secondaryLabel="Browse examples"
           secondaryHref="/examples"
@@ -370,21 +355,20 @@ export default function HowItWorksPage() {
 
 const howThStyle: React.CSSProperties = {
   textAlign: 'left',
-  fontFamily: 'var(--font-mono)',
   fontSize: 11,
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
-  color: 'var(--dusk-ink-subtle)',
+  color: 'rgba(0,0,0,0.35)',
   padding: '10px 16px',
-  borderBottom: '1px solid var(--dusk-rule)',
+  borderBottom: '1px solid rgba(0,0,0,0.08)',
 }
 
 const howTdStyle: React.CSSProperties = {
   fontFamily: 'var(--font-body)',
   fontSize: 14.5,
   lineHeight: 1.5,
-  color: 'var(--dusk-ink-mid)',
+  color: 'rgba(0,0,0,0.5)',
   padding: '14px 16px',
-  borderBottom: '1px solid var(--dusk-rule-soft)',
+  borderBottom: '1px solid rgba(0,0,0,0.06)',
   verticalAlign: 'top',
 }

@@ -7,9 +7,9 @@
 // this page can export metadata, which a 'use client' page cannot (seo #6).
 
 import type { Metadata } from 'next'
-import MarketingHeader from '@/components/marketing/DuskHeader'
-import MarketingFooter from '@/components/marketing/DuskFooter'
-import MarketingCTASection from '@/components/marketing/DuskCTASection'
+import MarketingHeader from '@/components/marketing/Header'
+import MarketingFooter from '@/components/marketing/Footer'
+import MarketingCTASection from '@/components/marketing/CTASection'
 import { ExampleGrid } from '@/components/examples/ExampleGrid'
 import { pageMetadata } from '@/lib/site'
 
@@ -23,23 +23,23 @@ export const metadata: Metadata = pageMetadata({
 
 export default function ExamplesPage() {
   return (
-    <div className="dusk-page">
-      <MarketingHeader />
+    <div style={{ background: '#fff', color: '#000' }}>
+      <MarketingHeader variant="subpage" />
       <main id="main">
         <section style={{ paddingBlock: 'clamp(40px, 6vw, 72px)' }}>
           <div className="container">
             {/* Header */}
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--amber)' }}>
+            <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)' }}>
               Examples
             </p>
             <h1
               style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: 500,
+                fontFamily: 'var(--font-serif)',
+                fontWeight: 400,
                 fontSize: 'clamp(30px, 4vw, 48px)',
                 lineHeight: 1.1,
                 letterSpacing: '-0.01em',
-                color: 'var(--dusk-ink)',
+                color: '#000',
                 marginTop: 16,
                 maxWidth: '18ch',
               }}
@@ -50,7 +50,7 @@ export default function ExamplesPage() {
               style={{
                 fontFamily: 'var(--font-body)',
                 fontSize: 17,
-                color: 'var(--dusk-ink-mid)',
+                color: 'rgba(0,0,0,0.5)',
                 marginTop: 14,
                 maxWidth: '60ch',
               }}
@@ -67,7 +67,7 @@ export default function ExamplesPage() {
         <MarketingCTASection
           eyebrow="Start"
           heading="Start your own house."
-          primaryLabel="Try it instantly"
+          primaryLabel="Try it free"
           primaryHref="/try"
           secondaryLabel="How it works"
           secondaryHref="/how-it-works"

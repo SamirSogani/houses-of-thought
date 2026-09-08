@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import { pageMetadata } from '@/lib/site'
-import MarketingHeader from '@/components/marketing/DuskHeader'
-import MarketingFooter from '@/components/marketing/DuskFooter'
-import MarketingCTASection from '@/components/marketing/DuskCTASection'
+import MarketingHeader from '@/components/marketing/Header'
+import MarketingFooter from '@/components/marketing/Footer'
+import MarketingCTASection from '@/components/marketing/CTASection'
 import ScrollRevealInit from '@/components/ScrollReveal'
 import StoryIntroSection from '@/components/sections/StoryIntroSection'
 import StoryChaptersSection from '@/components/sections/StoryChaptersSection'
@@ -18,16 +18,16 @@ export const metadata: Metadata = pageMetadata({
 
 export default function StoryPage() {
   return (
-    <div className="dusk-page">
+    <div style={{ background: '#fff', color: '#000' }}>
       <ScrollRevealInit />
-      <MarketingHeader />
+      <MarketingHeader variant="subpage" />
       <main id="main">
         <StoryIntroSection />
         <StoryChaptersSection />
         <MarketingCTASection
           eyebrow="Your turn"
           heading="Build your first house."
-          primaryLabel="Try it instantly"
+          primaryLabel="Try it free"
           primaryHref="/try"
           secondaryLabel="How it works"
           secondaryHref="/how-it-works"

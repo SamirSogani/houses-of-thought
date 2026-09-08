@@ -181,7 +181,7 @@ export default function Constellation({ variant, onSweepComplete }: Constellatio
         <path
           d={nodePath()}
           fill="none"
-          stroke="var(--amber)"
+          stroke="rgba(0,0,0,0.15)"
           strokeWidth={1.6}
           strokeLinecap="round"
           pathLength={1}
@@ -189,7 +189,6 @@ export default function Constellation({ variant, onSweepComplete }: Constellatio
           style={{
             strokeDasharray: 1,
             strokeDashoffset: phase === 'pending' ? 1 : 0,
-            opacity: 0.55,
           }}
         />
 
@@ -198,7 +197,7 @@ export default function Constellation({ variant, onSweepComplete }: Constellatio
             SMIL timing is never subject to the same page-load race the CSS
             delays used to fall into. */}
         {phase === 'animating' && (
-          <circle r={5.5} fill="var(--amber)" style={{ filter: 'drop-shadow(0 0 7px var(--amber))' }}>
+          <circle r={5.5} fill="#000" style={{ filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.35))' }}>
             <animateMotion dur={`${travelMs}ms`} path={nodePath()} fill="freeze" calcMode="linear" />
             <animate
               attributeName="opacity"
@@ -242,14 +241,14 @@ export default function Constellation({ variant, onSweepComplete }: Constellatio
                 markPositions(cx, cy).map((m, mi) => {
                   const isRetry = mi === retryMarkIndex(i)
                   const markDelay = nodeDelay + 260 + mi * MARK_STAGGER_MS
-                  const resolvedFill = 'var(--standard-cool)'
+                  const resolvedFill = '#000'
                   return (
                     <circle
                       key={mi}
                       cx={m.x}
                       cy={m.y}
                       r={MARK_R}
-                      fill={phase === 'resolved' ? resolvedFill : 'var(--dusk-rule)'}
+                      fill={phase === 'resolved' ? resolvedFill : 'rgba(0,0,0,0.15)'}
                       className={
                         phase === 'animating' ? (isRetry ? 'constellation-mark-retry' : 'constellation-mark-resolve') : undefined
                       }
@@ -263,8 +262,8 @@ export default function Constellation({ variant, onSweepComplete }: Constellatio
                 cx={cx}
                 cy={cy}
                 r={r}
-                fill={isSelected ? 'var(--standard-cool-soft)' : 'rgba(242,176,33,0.12)'}
-                stroke={isSelected ? 'var(--standard-cool)' : 'var(--amber)'}
+                fill={isSelected ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.04)'}
+                stroke={isSelected ? '#000' : 'rgba(0,0,0,0.35)'}
                 strokeWidth={isSelected ? 2.4 : 1.8}
                 className={
                   phase === 'resolved' && !layer.hasPanel
@@ -273,7 +272,11 @@ export default function Constellation({ variant, onSweepComplete }: Constellatio
                       ? 'constellation-node'
                       : undefined
                 }
-                style={{ animationDelay: phase === 'animating' ? `${nodeDelay}ms` : undefined, transition: 'fill 0.2s, stroke 0.2s' }}
+                style={{
+                  animationDelay: phase === 'animating' ? `${nodeDelay}ms` : undefined,
+                  transition: 'fill 0.2s, stroke 0.2s',
+                  ...( { '--node-glow': 'rgba(0,0,0,0.3)' } as React.CSSProperties),
+                }}
               />
               <text
                 x={cx}
@@ -281,7 +284,7 @@ export default function Constellation({ variant, onSweepComplete }: Constellatio
                 textAnchor="middle"
                 fontFamily="var(--font-mono)"
                 fontSize={layer.hasPanel ? 12 : 10}
-                fill="var(--dusk-ink)"
+                fill="#000"
                 style={{ pointerEvents: 'none' }}
               >
                 {i + 1}
@@ -293,7 +296,7 @@ export default function Constellation({ variant, onSweepComplete }: Constellatio
 
       {variant === 'compressed' && (
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginTop: 20 }}>
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--dusk-ink-subtle)' }}>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'rgba(0,0,0,0.35)' }}>
             Seven layers · six reviewed by nine independent standards each · one plain judgment call.
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -306,7 +309,7 @@ export default function Constellation({ variant, onSweepComplete }: Constellatio
             <ReducedMotionToggle reducedMotion={reducedMotion} onToggle={toggleReducedMotion} />
             <Link
               href="/how-it-works"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 15, color: 'var(--amber)', whiteSpace: 'nowrap' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 15, color: '#000', whiteSpace: 'nowrap' }}
             >
               See how it works <ArrowIcon />
             </Link>
@@ -338,8 +341,8 @@ function ReducedMotionToggle({ reducedMotion, onToggle }: { reducedMotion: boole
         fontSize: 11,
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
-        color: 'var(--dusk-ink-subtle)',
-        border: '1px solid var(--dusk-rule)',
+        color: 'rgba(0,0,0,0.35)',
+        border: '1px solid rgba(0,0,0,0.15)',
         borderRadius: 999,
         padding: '6px 12px',
         whiteSpace: 'nowrap',
@@ -359,43 +362,33 @@ function LayerDetail({ layer, index }: { layer: (typeof CONSTELLATION_LAYERS)[nu
   return (
     <div
       aria-live="polite"
-      className="dusk-card"
-      style={{ padding: 'clamp(22px, 3vw, 32px)', marginTop: 24 }}
+      style={{
+        padding: 'clamp(22px, 3vw, 32px)',
+        marginTop: 24,
+        background: '#fff',
+        border: '1px solid rgba(0,0,0,0.08)',
+        borderRadius: 'var(--radius-card)',
+      }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--amber)',
-            color: 'var(--ink)',
-            borderRadius: 4,
-            minWidth: 26,
-            height: 22,
-            fontWeight: 600,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            padding: '0 6px',
-          }}
-        >
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 500, color: 'rgba(0,0,0,0.25)' }}>
           {String(index + 1).padStart(2, '0')}
         </span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--dusk-ink-subtle)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(0,0,0,0.35)' }}>
           Layer {index + 1} of 7 · {layer.hasPanel ? 'Nine-standard review panel' : 'No review panel'}
         </span>
       </div>
 
-      <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 26, marginTop: 14, color: 'var(--dusk-ink)' }}>
+      <h3 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 26, marginTop: 14, color: '#000' }}>
         {layer.name}
       </h3>
-      <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.6, color: 'var(--dusk-ink-mid)', marginTop: 10, maxWidth: '68ch' }}>
+      <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.6, color: 'rgba(0,0,0,0.5)', marginTop: 10, maxWidth: '68ch' }}>
         {layer.job}
       </p>
 
       <a
         href={`#layer-${layer.id}`}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 16, fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--amber)' }}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 16, fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: '#000', borderBottom: '1px solid rgba(0,0,0,0.3)' }}
       >
         Read the full write-up ↓
       </a>

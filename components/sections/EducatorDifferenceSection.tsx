@@ -17,13 +17,13 @@ const teacherFeatures = [
 export default function EducatorDifferenceSection() {
   return (
     <section
-      style={{ background: 'var(--white)', borderTop: '1px solid var(--rule)', paddingBlock: 'var(--section-py)' }}
+      style={{ background: '#fff', borderTop: '1px solid rgba(0,0,0,0.08)', paddingBlock: 'var(--section-py)' }}
     >
       <div className="container" data-reveal>
-        <p className="eyebrow" style={{ color: 'var(--amber-text)' }}>
+        <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)' }}>
           The key difference
         </p>
-        <h2 className="h2" style={{ marginTop: 16, fontSize: 'clamp(28px, 3.6vw, 44px)', maxWidth: '20ch' }}>
+        <h2 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 'clamp(28px, 3.6vw, 44px)', lineHeight: 1.1, marginTop: 16, maxWidth: '20ch' }}>
           The AI won&rsquo;t do their homework. That&rsquo;s the point.
         </h2>
 
@@ -32,32 +32,31 @@ export default function EducatorDifferenceSection() {
           <div
             style={{
               flex: '1 1 340px',
-              background: 'var(--parchment)',
-              border: '1px solid var(--ink)',
+              background: 'rgba(0,0,0,0.02)',
+              border: '1px solid #000',
               borderRadius: 12,
               padding: 30,
             }}
           >
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 22, color: 'var(--ink)' }}>
+              <h3 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 22, color: '#000' }}>
                 Student mode
               </h3>
               <span
                 style={{
-                  fontFamily: 'var(--font-mono)',
                   fontSize: 11,
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
-                  border: '1px solid var(--ink)',
+                  border: '1px solid #000',
                   borderRadius: 5,
                   padding: '4px 8px',
-                  color: 'var(--ink)',
+                  color: '#000',
                 }}
               >
                 Assistant off
               </span>
             </div>
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--ink-mid)', marginTop: 12 }}>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'rgba(0,0,0,0.5)', marginTop: 12 }}>
               A full structured builder, with the co-reasoning assistant switched
               off on purpose.
             </p>
@@ -65,7 +64,7 @@ export default function EducatorDifferenceSection() {
               {studentFeatures.map((f) => (
                 <div key={f.text} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   {f.ok ? <CheckIcon /> : <XIcon />}
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--ink-mid)' }}>{f.text}</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'rgba(0,0,0,0.5)' }}>{f.text}</span>
                 </div>
               ))}
             </div>
@@ -75,19 +74,18 @@ export default function EducatorDifferenceSection() {
           <div
             style={{
               flex: '1 1 340px',
-              background: 'var(--white)',
-              border: '1px solid var(--rule)',
+              background: '#fff',
+              border: '1px solid rgba(0,0,0,0.08)',
               borderRadius: 12,
               padding: 30,
             }}
           >
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 22, color: 'var(--ink)' }}>
+              <h3 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 22, color: '#000' }}>
                 Teacher & Standard
               </h3>
               <span
                 style={{
-                  fontFamily: 'var(--font-mono)',
                   fontSize: 11,
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
@@ -100,7 +98,7 @@ export default function EducatorDifferenceSection() {
                 Full access
               </span>
             </div>
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--ink-mid)', marginTop: 12 }}>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'rgba(0,0,0,0.5)', marginTop: 12 }}>
               Everything students get, plus the co-reasoning assistant for your
               own work.
             </p>
@@ -108,14 +106,14 @@ export default function EducatorDifferenceSection() {
               {teacherFeatures.map((text) => (
                 <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <CheckIcon />
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--ink-mid)' }}>{text}</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'rgba(0,0,0,0.5)' }}>{text}</span>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.6, color: 'var(--ink-subtle)', maxWidth: '60ch', marginTop: 28 }}>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, lineHeight: 1.6, color: 'rgba(0,0,0,0.35)', maxWidth: '60ch', marginTop: 28 }}>
           The restriction is pedagogy rather than a shortcoming. With the
           assistant stepped back, students do the reasoning themselves, which is
           the whole thing you set out to teach and grade.

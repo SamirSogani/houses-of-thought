@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { pageMetadata } from '@/lib/site'
-import MarketingHeader from '@/components/marketing/DuskHeader'
-import MarketingFooter from '@/components/marketing/DuskFooter'
+import MarketingHeader from '@/components/marketing/Header'
+import MarketingFooter from '@/components/marketing/Footer'
 import TryItFlow from '@/components/try/TryItFlow'
 
 export const metadata: Metadata = pageMetadata({
@@ -19,15 +19,13 @@ export default async function TryPage({
 }) {
   const { q } = await searchParams
   return (
-    <div className="dusk-page">
-      <MarketingHeader />
+    <div style={{ background: '#fff', color: '#000' }}>
+      <MarketingHeader variant="subpage" />
       {/* The real Mini House flow (components/try/TryItFlow.tsx +
-          MiniHouseResult.tsx) is restored here as the working /try
-          experience — its light, "paper" styling is left exactly as
-          designed rather than recolored piecemeal, so it sits inside the
-          new dusk chrome as a lit page rather than a source of subtle
-          color-contrast bugs. */}
-      <main id="main" style={{ background: 'var(--parchment)' }}>
+          MiniHouseResult.tsx) already uses light --ink/--parchment tokens
+          that read cleanly on white, so it sits directly on the page here
+          rather than needing a "lit island" wrapper. */}
+      <main id="main">
         <TryItFlow initialQuestion={q ?? ''} />
       </main>
       <MarketingFooter />

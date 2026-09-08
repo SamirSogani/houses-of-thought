@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import { pageMetadata } from '@/lib/site'
-import MarketingHeader from '@/components/marketing/DuskHeader'
-import MarketingFooter from '@/components/marketing/DuskFooter'
-import MarketingCTASection from '@/components/marketing/DuskCTASection'
+import MarketingHeader from '@/components/marketing/Header'
+import MarketingFooter from '@/components/marketing/Footer'
+import MarketingCTASection from '@/components/marketing/CTASection'
 import ScrollRevealInit from '@/components/ScrollReveal'
 import FaqIntroSection from '@/components/sections/FaqIntroSection'
 import FaqGroupsSection from '@/components/sections/FaqGroupsSection'
@@ -40,9 +40,9 @@ const faqJsonLd = {
 
 export default function FaqPage() {
   return (
-    <div className="dusk-page">
+    <div style={{ background: '#fff', color: '#000' }}>
       <ScrollRevealInit />
-      <MarketingHeader />
+      <MarketingHeader variant="subpage" />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
@@ -53,7 +53,7 @@ export default function FaqPage() {
         <MarketingCTASection
           eyebrow="Still curious?"
           heading="The fastest answer is to build one."
-          primaryLabel="Try it instantly"
+          primaryLabel="Try it free"
           primaryHref="/try"
           secondaryLabel="How it works"
           secondaryHref="/how-it-works"

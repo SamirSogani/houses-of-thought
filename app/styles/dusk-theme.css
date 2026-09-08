@@ -1,47 +1,13 @@
-/* The "dusk constellation" visual system for the pre-login redesign. Scoped by
-   convention (only components under components/marketing/** and the redesigned
-   pre-login pages use these classes) rather than by CSS selector, matching the
-   existing per-concern stylesheet split (build-responsive.css, marketing-
-   responsive.css, account-responsive.css). Tokens live in globals.css :root
-   alongside the parchment palette — see the comment there for why this is
-   additive, not a retheme of the shared tokens.
-
-   CONTAINMENT NOTE (mirrors marketing-responsive.css): styling here pairs with
-   inline styles in components/marketing/**; keep the two in sync by hand. */
-
-/* ── Page-level surfaces ─────────────────────────────────────────────────── */
-.dusk-page {
-  background: var(--dusk-950);
-  background-image: var(--dusk-bg-gradient);
-  color: var(--dusk-ink);
-  min-height: 100vh;
-}
-
-/* A "paper" island for content that assumes a light surface and isn't safe to
-   recolor piecemeal (evidence rows, strength bars, legal prose, form fields —
-   all pull dark-on-light colors from shared, unmodified tokens/components).
-   Floating these as lit sheets on the dusk background keeps that content
-   exactly as designed while still reading as part of the new system. */
-.paper-card {
-  background: var(--white);
-  border: 1px solid var(--dusk-rule);
-  border-radius: 20px;
-  box-shadow: 0 24px 60px -24px rgba(2, 4, 12, 0.65);
-}
-
-/* A dark elevated surface for NEW dusk-native components (nav sheet, footer,
-   CTA band, diagram card, contact cards, auth card). */
-.dusk-card {
-  background: var(--dusk-card);
-  border: 1px solid var(--dusk-rule);
-  border-radius: var(--radius-card);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-}
-
-.dusk-rule-line {
-  border-color: var(--dusk-rule) !important;
-}
+/* Leftover home for the constellation diagram's animation grammar. The dusk
+   "page/card" surfaces this file used to also define (.dusk-page, .paper-card,
+   .dusk-card, .dusk-rule-line) are gone — every pre-login page now uses the
+   white monochrome system from the homepage redesign (commit 1b0f09d), and
+   the diagram itself (components/marketing/Constellation.tsx) recolors these
+   keyframes to monochrome via literal rgba()/hex values and the --node-glow
+   custom property, not via dusk tokens. Kept as its own file (rather than
+   folded into globals.css) only because the animation keyframes are sizeable
+   and scoped to one component, matching the existing per-concern stylesheet
+   split (build-responsive.css, marketing-responsive.css, account-responsive.css). */
 
 /* ── Constellation diagram ───────────────────────────────────────────────
    One consistent transition grammar reused everywhere (design brief): a node
@@ -55,25 +21,26 @@
 }
 
 @keyframes node-glow-in {
-  0% { opacity: 0; transform: scale(0.82); filter: drop-shadow(0 0 0 rgba(242, 176, 33, 0)); }
+  0% { opacity: 0; transform: scale(0.82); filter: drop-shadow(0 0 0 rgba(0, 0, 0, 0)); }
   60% { opacity: 1; transform: scale(1.06); }
-  100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 10px var(--node-glow, rgba(242, 176, 33, 0.55))); }
+  100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 10px var(--node-glow, rgba(0, 0, 0, 0.3))); }
 }
 
 @keyframes mark-resolve-in {
-  0% { opacity: 0.22; transform: scale(0.6); fill: var(--dusk-rule); }
-  100% { opacity: 1; transform: scale(1); fill: var(--standard-cool); }
+  0% { opacity: 0.22; transform: scale(0.6); fill: rgba(0, 0, 0, 0.15); }
+  100% { opacity: 1; transform: scale(1); fill: #000; }
 }
 
-/* A failed standard redoing the work: pulses the retry color before settling
-   into the same resolved state every mark ends in — the loop is visible, the
-   ending is identical either way. */
+/* A failed standard redoing the work: pulses a mid-gray before settling into
+   the same resolved black every mark ends in — the loop is visible (via
+   motion, not a hue change now that the palette is monochrome), the ending
+   is identical either way. */
 @keyframes mark-retry-pulse {
-  0% { opacity: 0.3; transform: scale(0.6); fill: var(--dusk-rule); }
-  35% { opacity: 1; transform: scale(1.25); fill: var(--dusk-retry); }
-  55% { opacity: 0.55; transform: scale(0.85); fill: var(--dusk-retry); }
-  80% { opacity: 1; transform: scale(1.2); fill: var(--dusk-retry); }
-  100% { opacity: 1; transform: scale(1); fill: var(--standard-cool); }
+  0% { opacity: 0.3; transform: scale(0.6); fill: rgba(0, 0, 0, 0.15); }
+  35% { opacity: 1; transform: scale(1.25); fill: rgba(0, 0, 0, 0.45); }
+  55% { opacity: 0.55; transform: scale(0.85); fill: rgba(0, 0, 0, 0.45); }
+  80% { opacity: 1; transform: scale(1.2); fill: rgba(0, 0, 0, 0.45); }
+  100% { opacity: 1; transform: scale(1); fill: #000; }
 }
 
 @keyframes breadth-pulse {
@@ -116,9 +83,4 @@
 [data-motion='reduced'] .constellation-mark-retry,
 [data-motion='reduced'] .constellation-breadth-pulse {
   animation: none !important;
-}
-
-/* ── Responsive ──────────────────────────────────────────────────────────── */
-@media (max-width: 640px) {
-  .dusk-nav-links { display: none !important; }
 }

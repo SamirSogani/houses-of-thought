@@ -66,13 +66,13 @@ export default function DemoVideo({
           aspectRatio: '16 / 9',
           borderRadius: 12,
           overflow: 'hidden',
-          background: 'var(--dusk-surface, #1a1a2e)',
+          background: 'rgba(0,0,0,0.03)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 16,
-          border: '1px solid var(--dusk-rule)',
+          border: '1px solid rgba(0,0,0,0.08)',
         }}
       >
         <div style={{ opacity: 0.35 }}>
@@ -82,7 +82,7 @@ export default function DemoVideo({
           style={{
             fontFamily: 'var(--font-body)',
             fontSize: 15,
-            color: 'var(--dusk-ink-subtle)',
+            color: 'rgba(0,0,0,0.35)',
             textAlign: 'center',
             maxWidth: '36ch',
             lineHeight: 1.5,
@@ -151,8 +151,8 @@ export default function DemoVideo({
         aspectRatio: '16 / 9',
         borderRadius: 12,
         overflow: 'hidden',
-        border: '1px solid var(--dusk-rule)',
-        background: thumbnailUrl ? `url(${thumbnailUrl}) center / cover no-repeat` : 'var(--dusk-surface, #1a1a2e)',
+        border: '1px solid rgba(0,0,0,0.08)',
+        background: thumbnailUrl ? `url(${thumbnailUrl}) center / cover no-repeat` : 'rgba(0,0,0,0.03)',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
@@ -169,7 +169,7 @@ export default function DemoVideo({
             right: 0,
             fontFamily: 'var(--font-body)',
             fontSize: 14,
-            color: 'var(--dusk-ink-subtle)',
+            color: 'rgba(0,0,0,0.35)',
             textAlign: 'center',
           }}
         >

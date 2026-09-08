@@ -1,14 +1,17 @@
 'use client'
 
-// Pre-login header for the homepage redesign. White bg, sticky, anchor nav.
-// Sub-pages that still use the dusk theme have their own layouts/headers;
-// this component serves only app/page.tsx.
+// Shared pre-login header. White bg, sticky. Two variants:
+//   - 'homepage' (default) — anchor nav into the single-scroll homepage.
+//   - 'subpage'  — real page links (lib/site.ts's MARKETING_NAV_LINKS), with
+//                  the current page underlined, for every other pre-login page.
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useFocusTrap } from '@/components/useFocusTrap'
+import { MARKETING_NAV_LINKS } from '@/lib/site'
 
-const NAV_LINKS = [
+const HOME_NAV_LINKS = [
   { href: '#how-it-works', label: 'How it works' },
   { href: '#examples', label: 'Examples' },
   { href: '#educators', label: 'Educators' },
@@ -23,9 +26,11 @@ function HouseIcon() {
   )
 }
 
-export default function MarketingHeader() {
+export default function MarketingHeader({ variant = 'homepage' }: { variant?: 'homepage' | 'subpage' }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const sheetRef = useFocusTrap<HTMLDivElement>(mobileOpen)
+  const pathname = usePathname()
+  const navLinks = variant === 'subpage' ? MARKETING_NAV_LINKS : HOME_NAV_LINKS
 
   useEffect(() => {
     const header = document.getElementById('mk-header')
@@ -87,11 +92,25 @@ export default function MarketingHeader() {
           </Link>
 
           <nav className="mk-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 28, marginLeft: 'auto' }}>
-            {NAV_LINKS.map((l) => (
-              <Link key={l.href} href={l.href} style={{ fontSize: 13, fontWeight: 500, color: 'rgba(0,0,0,0.5)' }}>
-                {l.label}
-              </Link>
-            ))}
+            {navLinks.map((l) => {
+              const active = variant === 'subpage' && pathname === l.href
+              return (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  aria-current={active ? 'page' : undefined}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: active ? 600 : 500,
+                    color: active ? '#000' : 'rgba(0,0,0,0.5)',
+                    borderBottom: active ? '1px solid #000' : '1px solid transparent',
+                    paddingBottom: 3,
+                  }}
+                >
+                  {l.label}
+                </Link>
+              )
+            })}
             <Link
               href="/login"
               style={{
@@ -170,7 +189,7 @@ export default function MarketingHeader() {
           </div>
 
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 40 }}>
-            {NAV_LINKS.map((l) => (
+            {navLinks.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}

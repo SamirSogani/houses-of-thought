@@ -19,11 +19,13 @@ const steps = [
 export default function EducatorClassroomSection() {
   return (
     <section
-      style={{ background: 'var(--parchment)', borderTop: '1px solid var(--rule)', paddingBlock: 'var(--section-py)' }}
+      style={{ background: 'rgba(0,0,0,0.02)', borderTop: '1px solid rgba(0,0,0,0.08)', paddingBlock: 'var(--section-py)' }}
     >
       <div className="container" data-reveal>
-        <p className="eyebrow">How classrooms work</p>
-        <h2 className="h2" style={{ marginTop: 16, maxWidth: '22ch' }}>
+        <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)' }}>
+          How classrooms work
+        </p>
+        <h2 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 'clamp(30px, 4vw, 48px)', lineHeight: 1.1, marginTop: 16, maxWidth: '22ch' }}>
           Set up in minutes. Grade the reasoning behind the verdict.
         </h2>
 
@@ -33,27 +35,27 @@ export default function EducatorClassroomSection() {
               key={s.num}
               style={{
                 flex: '1 1 280px',
-                background: 'var(--white)',
-                border: '1px solid var(--rule)',
+                background: '#fff',
+                border: '1px solid rgba(0,0,0,0.08)',
                 borderRadius: 12,
                 padding: 28,
               }}
             >
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--amber-text)' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(0,0,0,0.35)' }}>
                 {s.num}
               </span>
               <h3
                 style={{
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 500,
+                  fontFamily: 'var(--font-serif)',
+                  fontWeight: 400,
                   fontSize: 22,
-                  color: 'var(--ink)',
+                  color: '#000',
                   marginTop: 14,
                 }}
               >
                 {s.title}
               </h3>
-              <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.6, color: 'var(--ink-mid)', marginTop: 10 }}>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: 16, lineHeight: 1.6, color: 'rgba(0,0,0,0.5)', marginTop: 10 }}>
                 {s.body}
               </p>
             </div>

@@ -10,28 +10,28 @@ import type { Competitor } from '@/lib/compare/data'
 
 export function CompareTemplate({ competitor }: { competitor: Competitor }) {
   return (
-    <div className="dusk-page">
-      <MarketingHeader />
+    <div style={{ background: '#fff', color: '#000' }}>
+      <MarketingHeader variant="subpage" />
       <main id="main">
         <section style={{ paddingBlock: 'clamp(48px, 8vw, 96px)' }}>
           <div className="container" style={{ maxWidth: '68ch' }}>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--amber)' }}>
+            <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: '2.4px', textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)' }}>
               {competitor.eyebrow}
             </p>
             <h1
               style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: 500,
+                fontFamily: 'var(--font-serif)',
+                fontWeight: 400,
                 fontSize: 'clamp(30px, 4.6vw, 50px)',
                 lineHeight: 1.12,
                 letterSpacing: '-0.015em',
-                color: 'var(--dusk-ink)',
+                color: '#000',
                 marginTop: 16,
               }}
             >
               {competitor.headline}
             </h1>
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: 17, lineHeight: 1.65, color: 'var(--dusk-ink-mid)', marginTop: 18 }}>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 17, lineHeight: 1.65, color: 'rgba(0,0,0,0.5)', marginTop: 18 }}>
               {competitor.intro}
             </p>
           </div>
@@ -44,24 +44,24 @@ export function CompareTemplate({ competitor }: { competitor: Competitor }) {
                 <thead>
                   <tr>
                     <th style={thStyle}>Dimension</th>
-                    <th style={{ ...thStyle, color: 'var(--amber)' }}>Houses of Thought</th>
+                    <th style={{ ...thStyle, color: '#000' }}>Houses of Thought</th>
                     <th style={thStyle}>{competitor.shortName}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {competitor.rows.map((r) => (
                     <tr key={r.dimension}>
-                      <td style={{ ...tdStyle, color: 'var(--dusk-ink)', fontWeight: 600 }}>{r.dimension}</td>
+                      <td style={{ ...tdStyle, color: '#000', fontWeight: 600 }}>{r.dimension}</td>
                       <td style={tdStyle}>{r.houses}</td>
-                      <td style={{ ...tdStyle, color: 'var(--dusk-ink-subtle)' }}>{r.them}</td>
+                      <td style={{ ...tdStyle, color: 'rgba(0,0,0,0.35)' }}>{r.them}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--dusk-ink-subtle)', marginTop: 16 }}>
-              <Link href="/compare" style={{ color: 'var(--amber)', borderBottom: '1px solid var(--amber)', paddingBottom: 1 }}>
+            <p style={{ fontSize: 11, color: 'rgba(0,0,0,0.35)', marginTop: 16 }}>
+              <Link href="/compare" style={{ color: '#000', borderBottom: '1px solid rgba(0,0,0,0.3)', paddingBottom: 1 }}>
                 See the general comparison →
               </Link>
             </p>
@@ -71,7 +71,7 @@ export function CompareTemplate({ competitor }: { competitor: Competitor }) {
         <MarketingCTASection
           eyebrow="Bring your decisions here"
           heading="Free forever. Start now."
-          primaryLabel="Try it instantly"
+          primaryLabel="Try it free"
           primaryHref="/try"
           secondaryLabel="How it works"
           secondaryHref="/how-it-works"
@@ -85,21 +85,20 @@ export function CompareTemplate({ competitor }: { competitor: Competitor }) {
 
 const thStyle: React.CSSProperties = {
   textAlign: 'left',
-  fontFamily: 'var(--font-mono)',
   fontSize: 11,
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
-  color: 'var(--dusk-ink-subtle)',
+  color: 'rgba(0,0,0,0.35)',
   padding: '10px 16px',
-  borderBottom: '1px solid var(--dusk-rule)',
+  borderBottom: '1px solid rgba(0,0,0,0.08)',
 }
 
 const tdStyle: React.CSSProperties = {
   fontFamily: 'var(--font-body)',
   fontSize: 14.5,
   lineHeight: 1.5,
-  color: 'var(--dusk-ink-mid)',
+  color: 'rgba(0,0,0,0.5)',
   padding: '14px 16px',
-  borderBottom: '1px solid var(--dusk-rule-soft)',
+  borderBottom: '1px solid rgba(0,0,0,0.06)',
   verticalAlign: 'top',
 }

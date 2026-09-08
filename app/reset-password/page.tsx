@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { AuthCard, AuthError, AuthField } from '@/components/auth/AuthCard'
+import { AuthCard, AuthError, AuthField, authButtonStyle } from '@/components/auth/AuthCard'
 
 type Phase = 'checking' | 'ready' | 'invalid' | 'done'
 
@@ -74,8 +74,7 @@ export default function ResetPasswordPage() {
           </p>
           <Link
             href="/forgot-password"
-            className="btn-primary"
-            style={{ width: '100%', justifyContent: 'center' }}
+            style={{ ...authButtonStyle, width: '100%' }}
           >
             Request a new link
           </Link>
@@ -100,8 +99,7 @@ export default function ResetPasswordPage() {
               router.push('/dashboard')
               router.refresh()
             }}
-            className="btn-primary"
-            style={{ width: '100%', justifyContent: 'center' }}
+            style={{ ...authButtonStyle, width: '100%' }}
           >
             Go to dashboard
           </button>
@@ -138,11 +136,10 @@ export default function ResetPasswordPage() {
 
           <button
             type="submit"
-            className="btn-primary"
             disabled={loading}
             style={{
+              ...authButtonStyle,
               width: '100%',
-              justifyContent: 'center',
               marginTop: 8,
               opacity: loading ? 0.6 : 1,
               cursor: loading ? 'default' : 'pointer',
