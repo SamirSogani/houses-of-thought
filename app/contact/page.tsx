@@ -6,9 +6,9 @@
 
 import type { Metadata } from 'next'
 import { pageMetadata } from '@/lib/site'
-import MarketingHeader from '@/components/marketing/Header'
-import MarketingFooter from '@/components/marketing/Footer'
-import MarketingCTASection from '@/components/marketing/CTASection'
+import MarketingHeader from '@/components/marketing/DuskHeader'
+import MarketingFooter from '@/components/marketing/DuskFooter'
+import MarketingCTASection from '@/components/marketing/DuskCTASection'
 
 export const metadata: Metadata = pageMetadata({
   title: 'Contact',

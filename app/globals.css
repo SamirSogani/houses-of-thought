@@ -78,10 +78,23 @@
   /* A failed standard pulses this color before resolving to --standard-cool
      (diegetic motion: a real loop-and-retry, not decoration). */
   --dusk-retry: #f2795c;
+
+  /* ── Homepage redesign (monochrome) ──────────────────────────────────
+     Used only on the marketing homepage (app/page.tsx). All existing
+     parchment/dusk tokens stay — sub-pages and post-login still use them. */
+  --font-serif: var(--font-instrument-serif), 'Instrument Serif', Georgia, serif;
+  --hp-bg: #fff;
+  --hp-text: #000;
+  --hp-body: rgba(0,0,0,0.5);
+  --hp-label: rgba(0,0,0,0.3);
+  --hp-step: rgba(0,0,0,0.25);
+  --hp-muted: rgba(0,0,0,0.35);
+  --hp-divider: rgba(0,0,0,0.08);
+  --hp-border: rgba(0,0,0,0.15);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 
 body {
   font-family: var(--font-body);

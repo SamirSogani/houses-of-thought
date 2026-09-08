@@ -7,9 +7,9 @@
 // this page can export metadata, which a 'use client' page cannot (seo #6).
 
 import type { Metadata } from 'next'
-import MarketingHeader from '@/components/marketing/Header'
-import MarketingFooter from '@/components/marketing/Footer'
-import MarketingCTASection from '@/components/marketing/CTASection'
+import MarketingHeader from '@/components/marketing/DuskHeader'
+import MarketingFooter from '@/components/marketing/DuskFooter'
+import MarketingCTASection from '@/components/marketing/DuskCTASection'
 import { ExampleGrid } from '@/components/examples/ExampleGrid'
 import { pageMetadata } from '@/lib/site'
 

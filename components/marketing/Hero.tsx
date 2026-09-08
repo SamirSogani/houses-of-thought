@@ -1,13 +1,10 @@
 'use client'
 
-// Home hero: headline + the try-it box, front and center (redesign brief:
-// "the try-it text box front and center (rotating placeholder example
-// questions)"). Submitting routes to /try with the question attached, so the
-// animated confirmation there can acknowledge exactly what was typed.
+// Home hero: headline + the try-it box, front and center. Submitting routes
+// to /try with the question attached.
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowIcon } from '@/components/icons'
 import { MINI_HOUSE_EXAMPLES } from '@/lib/ai/mini-house'
 
 const ROTATE_MS = 3200
@@ -34,97 +31,114 @@ export default function Hero() {
   }
 
   return (
-    <section style={{ paddingBlock: 'clamp(64px, 10vw, 120px)' }}>
-      <div className="container" style={{ maxWidth: 760, margin: '0 auto', textAlign: 'center' }}>
+    <section style={{ paddingTop: 64, paddingBottom: 80, background: 'var(--hp-bg, #fff)' }}>
+      <div style={{ maxWidth: 1024, margin: '0 auto', padding: '0 24px', textAlign: 'center' }}>
         <span
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            border: '1px solid var(--dusk-rule)',
-            borderRadius: 'var(--radius-chip)',
-            padding: '6px 14px',
-            fontFamily: 'var(--font-mono)',
+            display: 'inline-block',
             fontSize: 11,
-            letterSpacing: '0.1em',
+            fontWeight: 500,
+            letterSpacing: '2.4px',
             textTransform: 'uppercase',
-            color: 'var(--amber)',
+            color: 'rgba(0,0,0,0.3)',
           }}
         >
-          Always free, no paid tier
+          Free forever &middot; No paid tier
         </span>
 
         <h1
+          className="hp-hero-heading"
           style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 500,
-            fontSize: 'clamp(38px, 6vw, 68px)',
-            lineHeight: 1.06,
-            letterSpacing: '-0.015em',
-            marginTop: 22,
-            color: 'var(--dusk-ink)',
+            fontFamily: 'var(--font-serif, "Instrument Serif", Georgia, serif)',
+            fontWeight: 400,
+            fontSize: 48,
+            lineHeight: 1.1,
+            letterSpacing: '-0.02em',
+            maxWidth: 600,
+            margin: '20px auto 0',
+            color: '#000',
           }}
         >
-          Reason through it,
-          <br />
-          don&rsquo;t just ask.
+          Reason through it, don&rsquo;t just ask.
         </h1>
 
         <p
           style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: 'clamp(17px, 1.6vw, 19px)',
-            lineHeight: 1.6,
-            color: 'var(--dusk-ink-mid)',
-            maxWidth: '52ch',
+            fontSize: 17,
+            lineHeight: 1.65,
+            color: 'rgba(0,0,0,0.5)',
+            maxWidth: 520,
             margin: '20px auto 0',
           }}
         >
           Ask a real question. Houses of Thought frames it, builds independent
-          perspectives, stress-tests the assumptions and evidence, and reaches
-          a conclusion, with every step checked by an independent review panel.
+          perspectives, stress-tests the evidence, and reaches a conclusion —
+          with every step checked.
         </p>
 
         <form
           onSubmit={submit}
-          className="dusk-card"
-          style={{ marginTop: 36, textAlign: 'left', overflow: 'hidden' }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            maxWidth: 480,
+            margin: '36px auto 0',
+            border: '2px solid #000',
+            borderRadius: 999,
+            padding: '4px 4px 4px 20px',
+          }}
         >
-          <textarea
+          <input
+            type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value.slice(0, 600))}
             onFocus={() => (inputFocused.current = true)}
             onBlur={() => (inputFocused.current = false)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submit(e)
-            }}
             placeholder={MINI_HOUSE_EXAMPLES[placeholderIndex]}
-            rows={3}
-            aria-label="A question or decision you're facing"
+            aria-label="What decision are you facing?"
             style={{
-              width: '100%',
-              resize: 'vertical',
+              flex: 1,
+              minWidth: 0,
               border: 'none',
               outline: 'none',
               background: 'transparent',
-              padding: '22px 24px',
-              fontFamily: 'var(--font-body)',
-              fontSize: 17,
-              lineHeight: 1.6,
-              color: 'var(--dusk-ink)',
-              minHeight: 96,
+              fontSize: 15,
+              color: '#000',
+              padding: '10px 0',
             }}
           />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 16px', borderTop: '1px solid var(--dusk-rule)' }}>
-            <button type="submit" className="btn-primary">
-              Try it instantly <ArrowIcon />
-            </button>
-          </div>
+          <button
+            type="submit"
+            style={{
+              flexShrink: 0,
+              display: 'inline-flex',
+              alignItems: 'center',
+              height: 40,
+              padding: '0 20px',
+              background: '#000',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 999,
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            Try it &rarr;
+          </button>
         </form>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--dusk-ink-subtle)', marginTop: 14 }}>
-          No account needed to try it.
+
+        <p style={{ fontSize: 12, color: 'rgba(0,0,0,0.35)', marginTop: 14 }}>
+          No account needed. Instant results.
         </p>
       </div>
+
+      <style>{`
+        @media (max-width: 640px) {
+          .hp-hero-heading { font-size: 32px !important; }
+        }
+      `}</style>
     </section>
   )
 }

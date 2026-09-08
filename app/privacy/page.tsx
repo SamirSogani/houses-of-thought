@@ -6,8 +6,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { Metadata } from 'next'
 import { pageMetadata } from '@/lib/site'
-import MarketingHeader from '@/components/marketing/Header'
-import MarketingFooter from '@/components/marketing/Footer'
+import MarketingHeader from '@/components/marketing/DuskHeader'
+import MarketingFooter from '@/components/marketing/DuskFooter'
 import { LegalArticle, DraftNotice } from '@/components/legal/LegalArticle'
 
 export const metadata: Metadata = pageMetadata({

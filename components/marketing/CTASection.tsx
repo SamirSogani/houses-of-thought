@@ -1,9 +1,7 @@
-// Dusk-styled CTA band — a sibling of components/sections/CTASection.tsx,
-// which keeps serving the For Educators route (and the pages this redesign
-// doesn't touch) unchanged.
+// CTA band — solid black full-bleed section with white text and buttons.
+// Props interface preserved so callers don't need to change.
 
 import Link from 'next/link'
-import { ArrowIcon } from '@/components/icons'
 
 export default function MarketingCTASection({
   eyebrow,
@@ -23,26 +21,39 @@ export default function MarketingCTASection({
   note: string
 }) {
   return (
-    <section style={{ paddingBlock: 'clamp(56px, 9vw, 104px)', borderTop: '1px solid var(--dusk-rule)' }}>
-      <div className="container" style={{ maxWidth: '62ch', margin: '0 auto', textAlign: 'center' }}>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--amber)' }}>
-          {eyebrow}
-        </p>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(34px, 5vw, 60px)', lineHeight: 1.1, letterSpacing: '-0.01em', color: 'var(--dusk-ink)', marginTop: 16 }}>
-          {heading}
-        </h2>
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 14, marginTop: 32 }}>
-          <Link href={primaryHref} className="btn-primary">
-            {primaryLabel} <ArrowIcon />
-          </Link>
-          <Link
-            href={secondaryHref}
-            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, padding: '0 24px', border: '1px solid var(--dusk-rule)', color: 'var(--dusk-ink)', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 16, borderRadius: 'var(--radius-btn)' }}
-          >
-            {secondaryLabel}
-          </Link>
-        </div>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--dusk-ink-subtle)', marginTop: 22 }}>{note}</p>
+    <section style={{ background: '#000', color: '#fff', padding: '80px 24px', textAlign: 'center' }}>
+      <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: 2.4, textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)', margin: '0 0 16px' }}>
+        {eyebrow}
+      </p>
+      <h2 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 36, lineHeight: 1.2, margin: 0 }}>
+        {heading}
+      </h2>
+      <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.5)', margin: '14px 0 0' }}>{note}</p>
+      <div style={{ marginTop: 32, display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center' }}>
+        <Link
+          href={primaryHref}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: 48,
+            padding: '0 28px',
+            background: '#fff',
+            color: '#000',
+            fontSize: 14,
+            fontWeight: 600,
+            borderRadius: 8,
+            textDecoration: 'none',
+          }}
+        >
+          {primaryLabel}
+        </Link>
+        <Link
+          href={secondaryHref}
+          style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}
+        >
+          {secondaryLabel}
+        </Link>
       </div>
     </section>
   )

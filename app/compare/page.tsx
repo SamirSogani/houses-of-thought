@@ -7,9 +7,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { pageMetadata } from '@/lib/site'
-import MarketingHeader from '@/components/marketing/Header'
-import MarketingFooter from '@/components/marketing/Footer'
-import MarketingCTASection from '@/components/marketing/CTASection'
+import MarketingHeader from '@/components/marketing/DuskHeader'
+import MarketingFooter from '@/components/marketing/DuskFooter'
+import MarketingCTASection from '@/components/marketing/DuskCTASection'
 import { COMPETITORS, HUB_ROWS } from '@/lib/compare/data'
 
 export const metadata: Metadata = pageMetadata({

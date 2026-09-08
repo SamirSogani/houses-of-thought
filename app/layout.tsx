@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Fraunces, Inter_Tight, Geist_Mono } from 'next/font/google'
+import { Fraunces, Inter_Tight, Geist_Mono, Instrument_Serif } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION, FOUNDER } from '@/lib/site'
 import './globals.css'
@@ -27,6 +27,14 @@ const geistMono = Geist_Mono({
   weight: ['400', '500'],
   display: 'swap',
   variable: '--font-geist-mono',
+})
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: ['400'],
+  style: ['normal', 'italic'],
+  display: 'swap',
+  variable: '--font-instrument-serif',
 })
 
 // Site-wide metadata (seo #2/#3, aeo C3). `title.template` lets every page
@@ -99,7 +107,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${interTight.variable} ${geistMono.variable}`}
+      className={`${fraunces.variable} ${interTight.variable} ${geistMono.variable} ${instrumentSerif.variable}`}
     >
       <body>
         {/* Bypass the repeated sticky header + sheet strip (a11y M1, WCAG 2.4.1).
