@@ -26,9 +26,45 @@ export function getBraveCounter(): { queries: number; since: number } {
   return { queries: braveQueries, since: braveCountedSince }
 }
 
+// Global pacing gate (2026-09-09, Samir, real-verified on production traffic
+// from a phone: real "evidence provider rate limited" failures that never
+// showed up as usage on Brave's own monthly-quota dashboard — because they
+// weren't a quota breach, they were Brave's separate, per-second limiter
+// firing on a same-second burst). The old defense against this lived ONLY in
+// search.ts's runSearches() — a sequential for-loop with a 1100ms sleep — but
+// that only serializes queries WITHIN one runSearches() call. The reasoning
+// pipeline fans multiple perspectives' evidence-gathering out in parallel
+// (Promise.all/allSettled, orchestrator-perspectives.ts's fanOutTracked), and
+// each branch runs its own independent runSearches() loop with no knowledge
+// of the others — two or three perspectives can each fire their first query
+// in the same instant, bursting well past Brave's real 1 rps ceiling in
+// aggregate even though account-wide usage stays nowhere near the monthly
+// cap. Chaining every call to braveSearch through ONE promise queue — the
+// only shared resource across every concurrent caller in this process —
+// serializes them regardless of which branch they came from. JS's
+// single-threaded execution makes this safe without a real lock: the
+// `braveQueue =` reassignment below always runs to completion before any
+// other call's `.then` can observe it.
+let braveQueue: Promise<void> = Promise.resolve()
+let lastBraveCallAt = 0
+const BRAVE_MIN_INTERVAL_MS = 1100
+function waitForBraveSlot(): Promise<void> {
+  const turn = braveQueue.then(async () => {
+    const wait = Math.max(0, lastBraveCallAt + BRAVE_MIN_INTERVAL_MS - Date.now())
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
+    lastBraveCallAt = Date.now()
+  })
+  // Never let one caller's rejection break the queue for callers behind it —
+  // waitForBraveSlot() itself can't reject, but chaining defensively here
+  // costs nothing and rules it out regardless of what changes upstream.
+  braveQueue = turn.catch(() => {})
+  return turn
+}
+
 export async function braveSearch(query: string, count = 6): Promise<BraveResult[]> {
   const key = process.env.BRAVE_SEARCH_API_KEY
   if (!key) throw new AiError(500, 'search-not-configured')
+  await waitForBraveSlot()
   braveQueries += 1
 
   const controller = new AbortController()

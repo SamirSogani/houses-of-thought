@@ -147,7 +147,13 @@ export function ReasoningPipelinePage() {
   // handling). null for every other kind of error.
   const [subElementFailures, setSubElementFailures] = useState<SubElementFailure[] | null>(null)
   const [haltReason, setHaltReason] = useState<string | null>(null)
-  const [retryInfo, setRetryInfo] = useState<{ attempt: number; waitMs: number } | null>(null)
+  // reason distinguishes an upstream 429 from a client-side fetch exception
+  // (2026-09-09) so the UI can show accurate copy for each — see the loop
+  // effect's catch block below for why a network error now retries the same
+  // way a rate-limit already did.
+  const [retryInfo, setRetryInfo] = useState<{ attempt: number; waitMs: number; reason: 'rate-limited' | 'network' } | null>(
+    null
+  )
   const [regenerationInfo, setRegenerationInfo] = useState<{ attempt: number } | null>(null)
   const runRef = useRef(run)
   runRef.current = run
@@ -202,7 +208,7 @@ export function ReasoningPipelinePage() {
             const code = body.error ?? 'ai-upstream-error'
             const waitMs = RATE_LIMIT_RETRY_DELAYS_MS[attempt - 1]
             if (code === 'ai-rate-limited' && waitMs !== undefined) {
-              setRetryInfo({ attempt, waitMs })
+              setRetryInfo({ attempt, waitMs, reason: 'rate-limited' })
               await new Promise((resolve) => setTimeout(resolve, waitMs))
               if (cancelled) return
               continue
@@ -284,6 +290,19 @@ export function ReasoningPipelinePage() {
           return
         } catch (err) {
           if ((err as Error)?.name === 'AbortError' || cancelled) return
+          // Auto-retry a bare fetch() exception the same bounded way a 429
+          // already does (2026-09-09) — see useReasoningPipelineRunner.ts's
+          // matching catch block for the full rationale (long-held,
+          // non-streaming connections dying on mobile networks/proxies, and
+          // every such failure this session real-verified succeeding on a
+          // bare retry).
+          const waitMs = RATE_LIMIT_RETRY_DELAYS_MS[attempt - 1]
+          if (waitMs !== undefined) {
+            setRetryInfo({ attempt, waitMs, reason: 'network' })
+            await new Promise((resolve) => setTimeout(resolve, waitMs))
+            if (cancelled) return
+            continue
+          }
           setRetryInfo(null)
           setErrorCode('ai-network-error')
           setPhase('paused')
@@ -662,8 +681,8 @@ export function ReasoningPipelinePage() {
 
             {retryInfo && (
               <div style={{ ...mono, color: 'var(--amber-text)', marginTop: 12, textTransform: 'none', letterSpacing: 'normal' }}>
-                Upstream provider rate-limited — retrying automatically in {Math.round(retryInfo.waitMs / 1000)}s
-                (attempt {retryInfo.attempt + 1}/{MAX_STEP_ATTEMPTS})…
+                {retryInfo.reason === 'rate-limited' ? 'Upstream provider rate-limited' : 'Network hiccup'} — retrying
+                automatically in {Math.round(retryInfo.waitMs / 1000)}s (attempt {retryInfo.attempt + 1}/{MAX_STEP_ATTEMPTS})…
               </div>
             )}
 

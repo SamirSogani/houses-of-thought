@@ -475,6 +475,85 @@ function stripMarkdownFence(raw: string): string {
   return match ? match[1].trim() : raw
 }
 
+// ── Truncation repair (completeJSON's third pass, see its own comment) ──────
+
+// Narrows a zod issue to the exact shape a plain `z.string().max(N)`
+// violation produces. Deliberately strict (checks code, origin, AND that
+// maximum is a plain number) — anything else (a missing required field, a
+// wrong type, an array-length overflow) must NOT be treated as
+// mechanically truncatable, so it falls through to the real
+// ai-invalid-output error instead of being silently mishandled.
+function isStringTooBig(
+  issue: unknown
+): issue is { code: 'too_big'; origin: 'string'; maximum: number; path: PropertyKey[] } {
+  const i = issue as { code?: unknown; origin?: unknown; maximum?: unknown; path?: unknown }
+  return i.code === 'too_big' && i.origin === 'string' && typeof i.maximum === 'number' && Array.isArray(i.path)
+}
+
+// Cuts at the last space at or before maxLength, so a truncated field reads
+// as a shortened sentence rather than a word sheared in half — falls back to
+// a hard cut only when there's no good boundary in the first half (a single
+// very long token), rather than returning a near-empty string.
+function truncateAtWordBoundary(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value
+  const cut = value.slice(0, maxLength)
+  const lastSpace = cut.lastIndexOf(' ')
+  return lastSpace > maxLength * 0.5 ? cut.slice(0, lastSpace) : cut
+}
+
+function getAtPath(obj: unknown, path: readonly PropertyKey[]): unknown {
+  let cur = obj
+  for (const key of path) {
+    if (cur === null || typeof cur !== 'object') return undefined
+    cur = (cur as Record<PropertyKey, unknown>)[key]
+  }
+  return cur
+}
+
+function setAtPath(obj: Record<PropertyKey, unknown>, path: readonly PropertyKey[], value: unknown): boolean {
+  if (path.length === 0) return false
+  let cur = obj
+  for (let i = 0; i < path.length - 1; i++) {
+    const next = cur[path[i]]
+    if (next === null || typeof next !== 'object') return false
+    cur = next as Record<PropertyKey, unknown>
+  }
+  cur[path[path.length - 1]] = value
+  return true
+}
+
+// completeJSON's third pass: only reachable after the first attempt AND the
+// schema-error retry have both already failed. Truncates every offending
+// field to its own schema cap (from the issue itself, not re-derived) and
+// re-validates. Returns { ok: false } — never throws — for anything outside
+// its narrow scope (issues aren't ALL plain string-length overflows, the
+// truncated object still doesn't validate, etc.) so the caller's existing
+// ai-invalid-output path is the only way those cases can fail.
+function repairTruncatedFields<T>(
+  parsed: unknown,
+  issues: readonly unknown[],
+  schema: z.ZodType<T>
+): { ok: true; value: T; truncated: { path: string; from: number; to: number }[] } | { ok: false } {
+  if (issues.length === 0 || !issues.every(isStringTooBig) || parsed === null || typeof parsed !== 'object') {
+    return { ok: false }
+  }
+  // Deep clone so a repair attempt that ultimately fails never mutates
+  // anything the caller (or the diagnostic log right after it) still reads.
+  const repaired = JSON.parse(JSON.stringify(parsed)) as Record<PropertyKey, unknown>
+  const truncated: { path: string; from: number; to: number }[] = []
+  for (const issue of issues) {
+    if (!isStringTooBig(issue)) return { ok: false } // defensive; .every above already guarantees this
+    const value = getAtPath(repaired, issue.path)
+    if (typeof value !== 'string') return { ok: false }
+    const shortened = truncateAtWordBoundary(value, issue.maximum)
+    if (!setAtPath(repaired, issue.path, shortened)) return { ok: false }
+    truncated.push({ path: issue.path.join('.') || '(root)', from: value.length, to: shortened.length })
+  }
+  const result = schema.safeParse(repaired)
+  if (!result.success) return { ok: false }
+  return { ok: true, value: result.data, truncated }
+}
+
 // ── Public facade ─────────────────────────────────────────────────────────────
 
 export async function completeJSON<T>(opts: {
@@ -530,12 +609,14 @@ export async function completeJSON<T>(opts: {
     deadlineAt: opts.deadlineAt ?? Date.now() + CHAIN_DEADLINE_MS[opts.role],
   }
 
-  function tryParse(raw: string): { ok: true; value: T } | { ok: false; error: string } {
+  function tryParse(
+    raw: string
+  ): { ok: true; value: T } | { ok: false; error: string; parsed: unknown; issues: readonly unknown[] } {
     let parsed: unknown
     try {
       parsed = JSON.parse(stripMarkdownFence(raw))
     } catch {
-      return { ok: false, error: 'response was not valid JSON' }
+      return { ok: false, error: 'response was not valid JSON', parsed: undefined, issues: [] }
     }
     let result = opts.schema.safeParse(parsed)
     // Defensive unwrap (2026-08-02, plans/active/reasoning-pipeline/14):
@@ -556,7 +637,7 @@ export async function completeJSON<T>(opts: {
     const compact = issue
       ? `${issue.path.join('.') || '(root)'}: ${issue.message}`.slice(0, 300)
       : 'did not match the schema'
-    return { ok: false, error: compact }
+    return { ok: false, error: compact, parsed, issues: result.error.issues }
   }
 
   // Ask once; on schema-parse failure, ask again with the validation error
@@ -569,6 +650,31 @@ export async function completeJSON<T>(opts: {
   const secondResult = await execute(opts.role, { ...base, user: retryUser })
   const second = tryParse(secondResult.content)
   if (second.ok) return second.value
+
+  // Third, code-only pass (2026-09-09, Samir's spec, real-verified live the
+  // same session it was added): fires ONLY when every issue on the retry's
+  // own output is a plain string-length overflow (isStringTooBig below) — a
+  // missing field, wrong type, or anything else still falls straight through
+  // to the ai-invalid-output throw. Motivation: DeepSeek-V4-Flash-0731
+  // real-verified repeatedly overflowing core_question/scope_notes/
+  // cross_perspective_notes/question_level_assumptions[i]'s length caps on
+  // BOTH the first attempt and the schema-error retry — sometimes padding an
+  // otherwise-good field with its own commentary about the length limit
+  // itself rather than actually shortening it. Truncating the offending
+  // field(s) to their own schema cap (issue.maximum — zod already computed
+  // this for us; no need to re-derive it from the jsonSchema above) and
+  // re-validating recovers a genuinely-good answer instead of throwing it
+  // away and forcing a manual retry through the whole UI.
+  const repaired = repairTruncatedFields(second.parsed, second.issues, opts.schema)
+  if (repaired.ok) {
+    log.warn('ai/router', 'completeJSON auto-truncated to fit schema', {
+      schemaName: opts.schemaName,
+      role: opts.role,
+      target: targetName(secondResult.target),
+      truncated: repaired.truncated,
+    })
+    return repaired.value
+  }
 
   // Diagnostic only (2026-07-30): visibility into what the model actually
   // returned on a genuine ai-invalid-output — this path previously had none.

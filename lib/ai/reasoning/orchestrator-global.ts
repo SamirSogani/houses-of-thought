@@ -6,6 +6,7 @@
 // redundancy the Perspectives layer has.
 
 import { completeJSON } from '@/lib/ai/router'
+import { log } from '@/lib/log'
 import {
   type FramePacket,
   type PerspectiveBundle,
@@ -16,7 +17,7 @@ import {
   type EvidenceStrategy,
   GlobalEvidencePopulateSchema,
   type GlobalEvidenceItemDraft,
-  EvidenceConfidenceSchema,
+  GlobalEvidenceConfidenceSchema,
   ConclusionsPacketSchema,
   type ConclusionsPacket,
   ImplicationsPacketSchema,
@@ -245,7 +246,7 @@ export async function runGlobalEvidenceConfidence(
     user: masterGuidance
       ? appendMasterGuidance(itemsBlock, masterGuidance.priorArtifact, masterGuidance.guidance)
       : appendRegenerationFeedback(itemsBlock, repair),
-    schema: EvidenceConfidenceSchema,
+    schema: GlobalEvidenceConfidenceSchema,
     schemaName: 'global_evidence_confidence',
     effort: isRepair ? 'high' : 'medium',
     allowHighReasoning: isRepair,
@@ -390,6 +391,7 @@ export async function runImplicationsReview(
 
 export async function runFinalComposition(
   frame: FramePacket,
+  conclusions: ConclusionsPacket,
   implications: ImplicationsPacket,
   dryRun: boolean,
   extraContext?: string | null
@@ -402,17 +404,64 @@ export async function runFinalComposition(
     }
   }
   const context = `${serializeFrame(frame, extraContext)}\n\n## Implications\n${implications.implications.map((i) => `- (${i.ikind}) ${i.text} — ${i.who}, ${i.horizon}`).join('\n')}\n\nConfidence: ${implications.confidence}${implications.caveats_from_degraded_layers.length ? `\nDegraded upstream: ${implications.caveats_from_degraded_layers.join('; ')}` : ''}`
-  return completeJSON({
-    role: 'synthesis',
-    system: `${REASONING_PERSONA}\n\n${FINAL_COMPOSITION_BLOCK}`,
-    user: context,
-    schema: FinalAnswerSchema,
-    schemaName: 'final_answer',
-    // 'medium' (was 'low', 2026-08-11) — no repair path exists for final
-    // composition (packaging only, no review panel), so every call here is a
-    // "first-pass" call by definition; matches the medium-first-pass default
-    // every other generate call now uses.
-    effort: 'medium',
-    maxTokens: 1200,
-  })
+  try {
+    return await completeJSON({
+      role: 'synthesis',
+      system: `${REASONING_PERSONA}\n\n${FINAL_COMPOSITION_BLOCK}`,
+      user: context,
+      schema: FinalAnswerSchema,
+      schemaName: 'final_answer',
+      // 'medium' (was 'low', 2026-08-11) — no repair path exists for final
+      // composition (packaging only, no review panel), so every call here is a
+      // "first-pass" call by definition; matches the medium-first-pass default
+      // every other generate call now uses.
+      effort: 'medium',
+      maxTokens: 1200,
+    })
+  } catch (err) {
+    // Template fallback (2026-09-09, Samir's spec, real-verified live the
+    // same session): final composition is packaging only — by this point
+    // conclusions and implications have ALREADY passed their own 9-agent
+    // review panels (every layer before this one hard-blocks on a failed
+    // panel, steps.ts STEP_FAILURE_MODE), so there is real, vetted substance
+    // to build a deterministic answer from without another model call.
+    // Deliberately catches ANY completeJSON failure here — invalid output
+    // after all three of its own passes (router.ts), an upstream error, a
+    // timeout — rather than distinguishing by error code: synthesis is
+    // DeepInfra-only with no fallback provider (router-lanes.ts's
+    // synthesisAttempts()), so whatever went wrong, there's nowhere else for
+    // the real call to go. The template below only loses the model's own
+    // framing and prose polish, never substance, which is strictly better
+    // than halting a fully-reasoned run on its very last, purely cosmetic
+    // step and forcing a manual retry through the whole UI.
+    log.warn('ai/reasoning/orchestrator-global', 'final composition failed — using deterministic template', {
+      error: (err as Error)?.message,
+    })
+    return buildTemplateFinalAnswer(frame, conclusions, implications)
+  }
+}
+
+// Deterministic fallback for runFinalComposition above — no model call, so it
+// cannot fail the way the real synthesis call can. Built entirely from
+// already-vetted (9-agent-reviewed) conclusions/implications; loses the
+// model's own framing and prose polish, never substance.
+function buildTemplateFinalAnswer(
+  frame: FramePacket,
+  conclusions: ConclusionsPacket,
+  implications: ImplicationsPacket
+): FinalAnswer {
+  const chain = conclusions.supporting_chain.length
+    ? `\n\nReasoning chain: ${conclusions.supporting_chain.join(' → ')}`
+    : ''
+  const raw = `${conclusions.conclusions.join(' ')}${chain}`
+  // Defensive only — conclusions/supporting_chain items are already
+  // schema-bounded individually, but FinalAnswerSchema.answer caps the
+  // WHOLE joined string at 3000, which several already-valid items joined
+  // together could still exceed.
+  const answer = raw.length > 3000 ? `${raw.slice(0, 2999)}…` : raw
+  return {
+    core_question: frame.core_question,
+    answer,
+    caveats: implications.caveats_from_degraded_layers,
+  }
 }
