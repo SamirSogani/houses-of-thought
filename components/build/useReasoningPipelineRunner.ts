@@ -77,11 +77,43 @@ interface StepResponse {
 // Same bounded wait-then-retry model as the admin page (decision 019's "2
 // retries/3 attempts") — see that file's comment for why this is short, not
 // long: the whole loop must fit inside this route's serverless budget.
-const RATE_LIMIT_RETRY_DELAYS_MS = [5_000, 15_000]
+// [5_000, 15_000] -> [5_000, 15_000, 30_000, 60_000] (2026-09-09, Samir's
+// spec): Samir's explicit call — real runs barely cost anything and
+// multi-hour autonomous testing is expected, so err toward more automatic
+// retrying before ever giving up, now that Part A's degrade-and-continue fix
+// means the pipeline itself no longer dead-ends either.
+const RATE_LIMIT_RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000]
 const MAX_STEP_ATTEMPTS = RATE_LIMIT_RETRY_DELAYS_MS.length + 1
+
+// Every code here is a transient upstream/pipeline hiccup where a fresh
+// attempt (a fresh model sample, a fresh connection) can plausibly succeed —
+// as opposed to ai-unauthorized/ai-bad-request/ai-not-configured/
+// ai-context-overflow/search-not-configured/invalid-request, which are
+// genuine misconfiguration or a structurally-too-large input that retrying
+// the identical request cannot fix. 2026-09-09, Samir's spec: the user asked
+// that error states essentially never reach them — broadened alongside Part
+// A's degrade-and-continue fix so the two together mean a visible error is
+// now a real, rare, unrecoverable exception, not routine.
+const TRANSIENT_ERROR_CODES = new Set(['ai-rate-limited', 'ai-upstream-error', 'ai-timeout', 'ai-invalid-output'])
 
 // Fixed, not user-selectable — see module comment above.
 const HOUSE_PIPELINE_N = MIN_N
+
+// Formats one evidence-gather round's Q&A for a single unit, appended onto
+// that unit's accumulated history (route-schema.ts's
+// perspectiveEvidenceGatherHistory/globalEvidenceGatherHistory) — 2026-09-09,
+// Samir's spec fix for the "model re-asks the same question 2-3 rounds in a
+// row" bug: evidence-strategy previously had no memory of its own prior
+// questions across a regeneration loop-back. A skipped question still gets
+// logged as "(not answered)" (not omitted) so the next round can tell
+// "asked, not answered" apart from "never asked" — resolvePendingEvidenceGather
+// is called with all-null answers by skipPendingEvidenceGather() below, and
+// that skip must land in history too, or the model would ask a third time
+// thinking it never asked at all.
+function appendGatherRound(priorHistory: string | null | undefined, unit: EvidenceGatherUnit, answers: (string | null)[]): string {
+  const round = unit.questions.map((q, i) => `Q: ${q.question}\nA: ${answers[i] ?? '(not answered)'}`).join('\n')
+  return priorHistory ? `${priorHistory}\n${round}` : round
+}
 
 export interface ReasoningPipelineRunner {
   phase: ReasoningPipelinePhase
@@ -204,7 +236,7 @@ export function useReasoningPipelineRunner(
             }
             const code = body.error ?? 'ai-upstream-error'
             const waitMs = RATE_LIMIT_RETRY_DELAYS_MS[attempt - 1]
-            if (code === 'ai-rate-limited' && waitMs !== undefined) {
+            if (TRANSIENT_ERROR_CODES.has(code) && waitMs !== undefined) {
               setRetryInfo({ attempt, waitMs, reason: 'rate-limited' })
               await new Promise((resolve) => setTimeout(resolve, waitMs))
               if (cancelled) return
@@ -496,12 +528,21 @@ export function useReasoningPipelineRunner(
 
   function resolvePendingEvidenceGather(answersPerUnit: (string | null)[][]) {
     if (!pendingEvidenceGather) return
-    const { kind, resumeStep } = pendingEvidenceGather
-    setRun((prev) =>
-      kind === 'perspectives'
-        ? { ...prev, perspectiveEvidenceGatherAnswers: answersPerUnit }
-        : { ...prev, globalEvidenceGatherAnswer: answersPerUnit[0] ?? null }
-    )
+    const { kind, units, resumeStep } = pendingEvidenceGather
+    setRun((prev) => {
+      if (kind === 'perspectives') {
+        const history = { ...(prev.perspectiveEvidenceGatherHistory ?? {}) }
+        units.forEach((unit, i) => {
+          history[unit.unitId] = appendGatherRound(history[unit.unitId], unit, answersPerUnit[i] ?? [])
+        })
+        return { ...prev, perspectiveEvidenceGatherAnswers: answersPerUnit, perspectiveEvidenceGatherHistory: history }
+      }
+      return {
+        ...prev,
+        globalEvidenceGatherAnswer: answersPerUnit[0] ?? null,
+        globalEvidenceGatherHistory: appendGatherRound(prev.globalEvidenceGatherHistory, units[0], answersPerUnit[0] ?? []),
+      }
+    })
     setPendingEvidenceGather(null)
     setPhase('running')
     setStep(resumeStep)

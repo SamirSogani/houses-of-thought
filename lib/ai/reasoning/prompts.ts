@@ -76,7 +76,7 @@ Return 1-6 assumptions this stance depends on but does not defend. Prefer load-b
 // — same pattern as every other perspective/global pair in this file.
 export const PERSPECTIVE_EVIDENCE_STRATEGY_BLOCK = `Task: given ONE perspective's stance below, decide how to gather evidence for it — do not write any evidence yet, just the plan.
 
-Return search_queries (up to 3 real web searches — request one only when a specific, checkable fact, like a named study or a real statistic, would turn a hypothetical evidence item into a real, citable one; most claims don't need it, leave empty — that is the normal case, not a fallback), needs_user_input (true only when something only the person asking would know — a number specific to their situation, a policy they're operating under — would materially change what evidence applies; not merely because more detail would be nice), questions_for_user (up to 3, only when needs_user_input is true), and reason (one sentence, either way). Search and a question can both apply, or neither.`
+Return search_queries (up to 3 real web searches — request one only when a specific, checkable fact, like a named study or a real statistic, would turn a hypothetical evidence item into a real, citable one; most claims don't need it, leave empty — that is the normal case, not a fallback), needs_user_input (true only when something only the person asking would know — a number specific to their situation, a policy they're operating under — would materially change what evidence applies; not merely because more detail would be nice), questions_for_user (up to 3, only when needs_user_input is true), and reason (one sentence, either way). Search and a question can both apply, or neither. If an "Already asked — do not repeat any of these" section appears in the context below, every question in it is already resolved — never ask the same question again, including a reworded version; only needs_user_input for a genuinely new gap those prior answers didn't cover, and if the same fact is still missing after an unhelpful or skipped answer, proceed with your best stated assumption instead of asking a third time.`
 
 export const PERSPECTIVE_EVIDENCE_POPULATE_BLOCK = `Task: given ONE perspective's stance below and whatever real search results or the person's own answer were found, write the actual evidence items.
 
@@ -97,7 +97,7 @@ Return question_level_assumptions (1-8), each ONE distinct, testable claim — i
 
 export const GLOBAL_EVIDENCE_STRATEGY_BLOCK = `Task: given the core question and ALL vetted perspectives below, decide how to gather evidence relevant to the QUESTION ITSELF (not confined to defending any one stance) — do not write any evidence yet, just the plan.
 
-Return search_queries (up to 3 real web searches — request one only when a specific, checkable fact would turn a hypothetical evidence item into a real, citable one; most claims don't need it, leave empty — that is the normal case, not a fallback), needs_user_input (true only when something only the person asking would know would materially change what evidence applies to this question; not merely because more detail would be nice), questions_for_user (up to 3, only when needs_user_input is true), and reason (one sentence, either way). Search and a question can both apply, or neither.`
+Return search_queries (up to 3 real web searches — request one only when a specific, checkable fact would turn a hypothetical evidence item into a real, citable one; most claims don't need it, leave empty — that is the normal case, not a fallback), needs_user_input (true only when something only the person asking would know would materially change what evidence applies to this question; not merely because more detail would be nice), questions_for_user (up to 3, only when needs_user_input is true), and reason (one sentence, either way). Search and a question can both apply, or neither. If an "Already asked — do not repeat any of these" section appears in the context below, every question in it is already resolved — never ask the same question again, including a reworded version; only needs_user_input for a genuinely new gap those prior answers didn't cover, and if the same fact is still missing after an unhelpful or skipped answer, proceed with your best stated assumption instead of asking a third time.`
 
 export const GLOBAL_EVIDENCE_POPULATE_BLOCK = `Task: given the core question, ALL vetted perspectives, and whatever real search results or the person's own answer were found, write the actual question-level evidence items.
 
@@ -274,6 +274,16 @@ export function formatContextGatherAnswers(
     .map((q, i) => (answers[i] ? `- Q: ${q.question}\n  A: ${answers[i]}` : null))
     .filter((x): x is string => x !== null)
   return lines.length ? `## Answers the admin provided when asked for clarification\n${lines.join('\n')}` : null
+}
+
+// Wraps an evidence-gather round's accumulated Q&A transcript (see
+// route-schema.ts's globalEvidenceGatherHistory/
+// perspectiveEvidenceGatherHistory) into a labeled block the strategy
+// prompt above explicitly tells the model not to repeat. Empty string
+// when there's no history yet (round 1) — callers can unconditionally
+// append this and get a no-op.
+export function formatGatherHistory(history: string | null | undefined): string {
+  return history ? `\n\n## Already asked — do not repeat any of these\n${history}` : ''
 }
 
 export function serializePerspectiveBundle(p: PerspectiveBundle): string {

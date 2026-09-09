@@ -42,6 +42,7 @@ import {
   PERSPECTIVE_COUNTERARGUMENT_BLOCK,
   serializeFrame,
   appendRegenerationFeedback,
+  formatGatherHistory,
 } from './prompts'
 import { runReviewPanel } from './orchestrator-panel'
 import { runSearches } from './search'
@@ -315,6 +316,13 @@ export async function runPerspectivesEvidenceStrategy(
   // exercised for free instead of only ever showing one unit at a time. No
   // effect outside dryRun.
   forceNeedsInput = false,
+  // 2026-09-09, Samir's spec — every real Q&A round THIS perspective's own
+  // evidence strategy has already asked/received, keyed by perspective_id so
+  // a sibling's history never leaks in. Same fix/rationale as
+  // orchestrator-global.ts's runGlobalEvidenceStrategy — see
+  // route-schema.ts's perspectiveEvidenceGatherHistory for how this
+  // accumulates client-side.
+  priorGatherHistory?: Record<string, string> | null,
   repair?: { priorStrategies: EvidenceStrategy[]; priorPartials: PerspectivePartialBundle[]; priorVerdicts: ReviewPanelVerdict[] },
   extraContext?: string | null
 ): Promise<EvidenceStrategy[]> {
@@ -333,7 +341,9 @@ export async function runPerspectivesEvidenceStrategy(
     }
     const priorVerdict = repair?.priorVerdicts[i]
     if (repair && !needsRegeneration(priorVerdict)) return repair.priorStrategies[i]
-    const stanceText = `${frameText}\n\n## This perspective's stance\n${stance.stance_label}: ${stance.stance_summary}\nKey claims:\n${stance.key_claims.map((c) => `- ${c}`).join('\n')}`
+    const stanceText =
+      `${frameText}\n\n## This perspective's stance\n${stance.stance_label}: ${stance.stance_summary}\nKey claims:\n${stance.key_claims.map((c) => `- ${c}`).join('\n')}` +
+      formatGatherHistory(priorGatherHistory?.[stance.perspective_id])
     const feedback = repair && priorVerdict ? { priorArtifact: repair.priorPartials[i], priorVerdict } : undefined
     return completeJSON({
       role: 'swarm',

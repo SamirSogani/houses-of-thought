@@ -315,19 +315,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ step, patch, nextStep: null, halted: true, haltReason })
   }
 
+  // verdictField (was `patch: Record<string, unknown>`, 2026-09-09, Samir's
+  // spec) — mirrors app/api/admin/reasoning/route.ts's own
+  // tryMasterReviewOrHalt: the 5 hard-block layers now degrade-and-continue
+  // instead of halting the whole run when their one master-guided attempt
+  // also fails, matching perspectives-review's existing per-bundle degrade
+  // pattern (orchestrator-perspectives.ts's runPerspectivesReview). halted()
+  // itself is left in place (still reachable in theory) but nothing in the
+  // normal course calls it anymore for these 5 steps.
   async function tryMasterReviewOrHalt(
     step: StepId,
     generateStep: StepId,
     artifact: unknown,
     verdict: ReviewPanelVerdict,
     context: string,
-    patch: Record<string, unknown>
+    verdictField: string
   ): Promise<Response> {
     if (run.masterReview?.forStep === step) {
-      return halted(step, verdict, patch)
+      return ok(step, { [verdictField]: { ...verdict, degraded: true } })
     }
     const guidance = await runMasterReview(verdict, artifact, context, dryRun)
-    return retryStep(step, generateStep, { ...patch, masterReview: { forStep: step, guidance } })
+    return retryStep(step, generateStep, { [verdictField]: verdict, masterReview: { forStep: step, guidance } })
   }
 
   try {

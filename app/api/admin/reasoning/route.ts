@@ -72,7 +72,7 @@ import {
   missing,
   buildExtraContext,
   buildAdHocContext,
-  degradedPerspectiveNotes,
+  degradedLayerNotes,
 } from './route-schema'
 
 export const maxDuration = 280
@@ -250,21 +250,35 @@ export async function POST(req: Request): Promise<Response> {
   // for the next *-generate call (via masterGuidance, threaded through the
   // matching generate case below) to follow instead of the raw 9-note dump.
   // Fires at most once per layer per run: run.masterReview.forStep already
-  // matching `step` means this WAS that one extra attempt and it failed too
-  // — no more chances, halt for real instead of looping forever.
+  // matching `step` means this WAS that one extra attempt and it failed too.
+  //
+  // 2026-09-09, Samir's spec — that "one more chance failed" branch used to
+  // call halted() and dead-end the whole run on a visible error screen. It
+  // now degrades and continues instead, the same way perspectives-review has
+  // always handled a bundle that never converges (runPerspectivesReview,
+  // orchestrator-perspectives.ts: `{ ...verdict, degraded: true }`, never
+  // flipping overall_pass) — so these 5 hard-block layers now behave exactly
+  // like that one already-redundant layer, and a run always reaches a final
+  // answer. `verdictField` (was a whole pre-built `patch` object) names which
+  // RunState key this layer's verdict lives under, since ok()/degrading both
+  // need to write `{ [verdictField]: ... }` and only the caller (one of the 5
+  // *-review cases below) knows that name. halted() itself is left in place
+  // (still reachable in theory, e.g. if STEP_FAILURE_MODE changes again
+  // later) but nothing in the normal course calls it anymore for these 5
+  // steps.
   async function tryMasterReviewOrHalt(
     step: StepId,
     generateStep: StepId,
     artifact: unknown,
     verdict: ReviewPanelVerdict,
     context: string,
-    patch: Record<string, unknown>
+    verdictField: string
   ): Promise<Response> {
     if (run.masterReview?.forStep === step) {
-      return halted(step, verdict, patch)
+      return ok(step, { [verdictField]: { ...verdict, degraded: true } })
     }
     const guidance = await runMasterReview(verdict, artifact, context, dryRun)
-    return retryStep(step, generateStep, { ...patch, masterReview: { forStep: step, guidance } })
+    return retryStep(step, generateStep, { [verdictField]: verdict, masterReview: { forStep: step, guidance } })
   }
 
   try {
@@ -312,7 +326,7 @@ export async function POST(req: Request): Promise<Response> {
             run.frame,
             verdict,
             `Original question: ${run.frame.original_query}`,
-            { frameVerdict: verdict }
+            'frameVerdict'
           )
         }
         return ok(step, { frameVerdict: verdict })
@@ -395,6 +409,9 @@ export async function POST(req: Request): Promise<Response> {
             run.perspectiveStances,
             dryRun,
             devForceNeedsInput,
+            // 2026-09-09, Samir's spec — see route-schema.ts's
+            // perspectiveEvidenceGatherHistory comment for why this exists.
+            run.perspectiveEvidenceGatherHistory,
             repair,
             extraContext
           )
@@ -541,7 +558,7 @@ export async function POST(req: Request): Promise<Response> {
             run.globalAssumptions,
             verdict,
             questionContext(run.frame, run.perspectives, extraContext),
-            { globalAssumptionsVerdict: verdict }
+            'globalAssumptionsVerdict'
           )
         }
         return ok(step, { globalAssumptionsVerdict: verdict })
@@ -562,6 +579,9 @@ export async function POST(req: Request): Promise<Response> {
           run.perspectives,
           dryRun,
           devForceNeedsInput,
+          // 2026-09-09, Samir's spec — see route-schema.ts's
+          // globalEvidenceGatherHistory comment for why this exists.
+          run.globalEvidenceGatherHistory,
           repair,
           extraContext,
           masterGuidance
@@ -632,7 +652,7 @@ export async function POST(req: Request): Promise<Response> {
             run.globalEvidence,
             verdict,
             serializeFrame(run.frame, extraContext),
-            { globalEvidenceVerdict: verdict }
+            'globalEvidenceVerdict'
           )
         }
         return ok(step, { globalEvidenceVerdict: verdict })
@@ -696,7 +716,7 @@ export async function POST(req: Request): Promise<Response> {
             run.conclusions,
             verdict,
             serializeFrame(run.frame, extraContext),
-            { conclusionsVerdict: verdict }
+            'conclusionsVerdict'
           )
         }
         return ok(step, { conclusionsVerdict: verdict })
@@ -704,7 +724,7 @@ export async function POST(req: Request): Promise<Response> {
 
       case 'implications-generate': {
         if (!run.frame || !run.conclusions) return missing('frame/conclusions')
-        const degradedNotes = degradedPerspectiveNotes(run)
+        const degradedNotes = degradedLayerNotes(run)
         const masterGuidance =
           run.masterReview?.forStep === 'implications-review' && run.implications
             ? { priorArtifact: run.implications, guidance: run.masterReview.guidance }
@@ -738,7 +758,7 @@ export async function POST(req: Request): Promise<Response> {
             run.implications,
             verdict,
             serializeFrame(run.frame, extraContext),
-            { implicationsVerdict: verdict }
+            'implicationsVerdict'
           )
         }
         return ok(step, { implicationsVerdict: verdict })
@@ -746,7 +766,12 @@ export async function POST(req: Request): Promise<Response> {
 
       case 'final-composition': {
         if (!run.frame || !run.conclusions || !run.implications) return missing('frame/conclusions/implications')
-        const finalAnswer = await runFinalComposition(run.frame, run.conclusions, run.implications, dryRun, extraContext)
+        // 2026-09-09, Samir's spec — implications-generate wrote its own
+        // caveats_from_degraded_layers before implications-review ever ran,
+        // so it couldn't have known if ITS OWN review degraded. Catch that
+        // one gap here, the last point before packaging.
+        const extraCaveats = run.implicationsVerdict?.degraded ? ['Implications: review panel did not fully pass.'] : undefined
+        const finalAnswer = await runFinalComposition(run.frame, run.conclusions, run.implications, dryRun, extraCaveats, extraContext)
         return ok(step, { finalAnswer })
       }
 

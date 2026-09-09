@@ -60,7 +60,7 @@ import {
   RequestSchema,
   missing,
   buildAdHocContext,
-  degradedPerspectiveNotes,
+  degradedLayerNotes,
 } from '@/app/api/admin/reasoning/route-schema'
 
 // Derived from the route's own request schema rather than hand-written, so
@@ -88,13 +88,18 @@ export interface StepDispatchContext {
   persist: (patchStep: StepId, patch: Record<string, unknown>, nextStep: StepId | null, isHalted: boolean, haltReason?: string) => void
   retryStep: (step: StepId, generateStep: StepId, patch: Record<string, unknown>) => Response
   perspectivesFanOutFailure: (step: StepId, err: PerspectivesGenerateError) => Response
+  // verdictField (was `patch: Record<string, unknown>`, 2026-09-09, Samir's
+  // spec) — see route.ts's tryMasterReviewOrHalt for why: the 5 hard-block
+  // layers now degrade-and-continue instead of halting, and both branches
+  // need to write `{ [verdictField]: ... }`, so the field name travels
+  // instead of a whole pre-built patch object.
   tryMasterReviewOrHalt: (
     step: StepId,
     generateStep: StepId,
     artifact: unknown,
     verdict: ReviewPanelVerdict,
     context: string,
-    patch: Record<string, unknown>
+    verdictField: string
   ) => Promise<Response>
 }
 
@@ -157,7 +162,7 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
             run.frame,
             verdict,
             `Original question: ${run.frame.original_query}`,
-            { frameVerdict: verdict }
+            'frameVerdict'
           )
         }
         return ok(step, { frameVerdict: verdict })
@@ -233,6 +238,9 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
             run.perspectiveStances,
             dryRun,
             devForceNeedsInput,
+            // 2026-09-09, Samir's spec — see route-schema.ts's
+            // perspectiveEvidenceGatherHistory comment for why this exists.
+            run.perspectiveEvidenceGatherHistory,
             repair,
             extraContext
           )
@@ -367,7 +375,7 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
             run.globalAssumptions,
             verdict,
             questionContext(run.frame, run.perspectives, extraContext),
-            { globalAssumptionsVerdict: verdict }
+            'globalAssumptionsVerdict'
           )
         }
         return ok(step, { globalAssumptionsVerdict: verdict })
@@ -388,6 +396,9 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
           run.perspectives,
           dryRun,
           devForceNeedsInput,
+          // 2026-09-09, Samir's spec — see route-schema.ts's
+          // globalEvidenceGatherHistory comment for why this exists.
+          run.globalEvidenceGatherHistory,
           repair,
           extraContext,
           masterGuidance
@@ -455,7 +466,7 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
             run.globalEvidence,
             verdict,
             serializeFrame(run.frame, extraContext),
-            { globalEvidenceVerdict: verdict }
+            'globalEvidenceVerdict'
           )
         }
         return ok(step, { globalEvidenceVerdict: verdict })
@@ -518,7 +529,7 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
             run.conclusions,
             verdict,
             serializeFrame(run.frame, extraContext),
-            { conclusionsVerdict: verdict }
+            'conclusionsVerdict'
           )
         }
         return ok(step, { conclusionsVerdict: verdict })
@@ -526,7 +537,7 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
 
       case 'implications-generate': {
         if (!run.frame || !run.conclusions) return missing('frame/conclusions')
-        const degradedNotes = degradedPerspectiveNotes(run)
+        const degradedNotes = degradedLayerNotes(run)
         const masterGuidance =
           run.masterReview?.forStep === 'implications-review' && run.implications
             ? { priorArtifact: run.implications, guidance: run.masterReview.guidance }
@@ -560,7 +571,7 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
             run.implications,
             verdict,
             serializeFrame(run.frame, extraContext),
-            { implicationsVerdict: verdict }
+            'implicationsVerdict'
           )
         }
         return ok(step, { implicationsVerdict: verdict })
@@ -568,7 +579,11 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
 
       case 'final-composition': {
         if (!run.frame || !run.conclusions || !run.implications) return missing('frame/conclusions/implications')
-        const finalAnswer = await runFinalComposition(run.frame, run.conclusions, run.implications, dryRun, extraContext)
+        // 2026-09-09, Samir's spec — see route.ts's matching case for why:
+        // implications-generate couldn't have known its OWN review would
+        // degrade, since that review hadn't run yet.
+        const extraCaveats = run.implicationsVerdict?.degraded ? ['Implications: review panel did not fully pass.'] : undefined
+        const finalAnswer = await runFinalComposition(run.frame, run.conclusions, run.implications, dryRun, extraCaveats, extraContext)
         return ok(step, { finalAnswer })
       }
 
