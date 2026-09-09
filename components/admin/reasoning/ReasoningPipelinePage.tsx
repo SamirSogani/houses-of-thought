@@ -87,18 +87,51 @@ interface StepResponse {
   retry?: boolean
 }
 
-// Bounded wait-then-retry for a transient upstream provider 429 (decision
-// 019's "2 retries/3 attempts" model, Phase 1.5 #2). Scoped ONLY to
-// 'ai-rate-limited' — our own daily-cap code ('rate-limited', see
-// lib/ai/findings.ts) never clears mid-run, so retrying it is pointless, and
-// every other AiError (invalid-output, context-overflow, ...) already gets
-// its own same-instant self-correction retry inside completeJSON
-// (lib/ai/router.ts) — stacking a second, identical retry on top of that
+// Bounded wait-then-retry for a transient upstream/pipeline hiccup (decision
+// 019's "2 retries/3 attempts" model, Phase 1.5 #2, broadened 2026-09-09).
+// Scoped to TRANSIENT_ERROR_CODES below — our own daily-cap code
+// ('rate-limited', see lib/ai/findings.ts) never clears mid-run, so retrying
+// it is pointless, and every genuine misconfiguration code (ai-unauthorized,
+// ai-bad-request, ai-not-configured, ai-context-overflow,
+// search-not-configured, invalid-request) already gets its own same-instant
+// self-correction retry inside completeJSON where that's possible
+// (lib/ai/router.ts) — stacking a second, identical retry on top of THOSE
 // wouldn't address a different failure mode, just spend more quota on one
-// that already had its shot. A short backoff (not a long one) because the
-// whole loop must fit inside this route's 30s serverless budget.
-const RATE_LIMIT_RETRY_DELAYS_MS = [5_000, 15_000]
+// that already had its shot.
+// [5_000, 15_000] -> [5_000, 15_000, 30_000, 60_000] (2026-09-09, Samir's
+// spec): Samir's explicit call — real runs barely cost anything and
+// multi-hour autonomous testing is expected, so err toward more automatic
+// retrying before ever giving up, now that Fix 2 Part A's degrade-and-
+// continue also means the pipeline itself no longer dead-ends.
+const RATE_LIMIT_RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000]
 const MAX_STEP_ATTEMPTS = RATE_LIMIT_RETRY_DELAYS_MS.length + 1
+
+// Every code here is a transient upstream/pipeline hiccup where a fresh
+// attempt (a fresh model sample, a fresh connection) can plausibly succeed —
+// as opposed to ai-unauthorized/ai-bad-request/ai-not-configured/
+// ai-context-overflow/search-not-configured/invalid-request, which are
+// genuine misconfiguration or a structurally-too-large input that retrying
+// the identical request cannot fix. 2026-09-09, Samir's spec: the user asked
+// that error states essentially never reach them — broadened alongside Part
+// A's degrade-and-continue fix so the two together mean a visible error is
+// now a real, rare, unrecoverable exception, not routine.
+const TRANSIENT_ERROR_CODES = new Set(['ai-rate-limited', 'ai-upstream-error', 'ai-timeout', 'ai-invalid-output'])
+
+// Formats one evidence-gather round's Q&A for a single unit, appended onto
+// that unit's accumulated history (route-schema.ts's
+// perspectiveEvidenceGatherHistory/globalEvidenceGatherHistory) — 2026-09-09,
+// Samir's spec fix for the "model re-asks the same question 2-3 rounds in a
+// row" bug: evidence-strategy previously had no memory of its own prior
+// questions across a regeneration loop-back. A skipped question still gets
+// logged as "(not answered)" (not omitted) so the next round can tell
+// "asked, not answered" apart from "never asked" — skipPendingEvidenceGather
+// below calls resolvePendingEvidenceGather with all-null answers, and that
+// skip must land in history too, or the model would ask a third time
+// thinking it never asked at all.
+function appendGatherRound(priorHistory: string | null | undefined, unit: EvidenceGatherUnit, answers: (string | null)[]): string {
+  const round = unit.questions.map((q, i) => `Q: ${q.question}\nA: ${answers[i] ?? '(not answered)'}`).join('\n')
+  return priorHistory ? `${priorHistory}\n${round}` : round
+}
 
 export function ReasoningPipelinePage() {
   const { accountType, caps, signOut } = useAuthedPage()
@@ -207,7 +240,7 @@ export function ReasoningPipelinePage() {
             }
             const code = body.error ?? 'ai-upstream-error'
             const waitMs = RATE_LIMIT_RETRY_DELAYS_MS[attempt - 1]
-            if (code === 'ai-rate-limited' && waitMs !== undefined) {
+            if (TRANSIENT_ERROR_CODES.has(code) && waitMs !== undefined) {
               setRetryInfo({ attempt, waitMs, reason: 'rate-limited' })
               await new Promise((resolve) => setTimeout(resolve, waitMs))
               if (cancelled) return
@@ -398,12 +431,21 @@ export function ReasoningPipelinePage() {
   // PendingEvidenceGather's comment on why there's no 'adhoc' branch here.
   function resolvePendingEvidenceGather(answersPerUnit: (string | null)[][]) {
     if (!pendingEvidenceGather) return
-    const { kind, resumeStep } = pendingEvidenceGather
-    setRun((prev) =>
-      kind === 'perspectives'
-        ? { ...prev, perspectiveEvidenceGatherAnswers: answersPerUnit }
-        : { ...prev, globalEvidenceGatherAnswer: answersPerUnit[0] ?? null }
-    )
+    const { kind, units, resumeStep } = pendingEvidenceGather
+    setRun((prev) => {
+      if (kind === 'perspectives') {
+        const history = { ...(prev.perspectiveEvidenceGatherHistory ?? {}) }
+        units.forEach((unit, i) => {
+          history[unit.unitId] = appendGatherRound(history[unit.unitId], unit, answersPerUnit[i] ?? [])
+        })
+        return { ...prev, perspectiveEvidenceGatherAnswers: answersPerUnit, perspectiveEvidenceGatherHistory: history }
+      }
+      return {
+        ...prev,
+        globalEvidenceGatherAnswer: answersPerUnit[0] ?? null,
+        globalEvidenceGatherHistory: appendGatherRound(prev.globalEvidenceGatherHistory, units[0], answersPerUnit[0] ?? []),
+      }
+    })
     setPendingEvidenceGather(null)
     setPhase('running')
     setStep(resumeStep)
@@ -710,7 +752,11 @@ export function ReasoningPipelinePage() {
                   ? RATE_LIMITED_COPY
                   : errorCode === 'ai-network-error'
                     ? 'Network hiccup — check your connection and retry.'
-                    : 'Could not reach a stage of the pipeline.'}
+                    : // 2026-09-09, Samir's spec: softened from the old raw
+                      // "Could not reach a stage of the pipeline." — now that
+                      // TRANSIENT_ERROR_CODES + Fix 2 Part A mean this only
+                      // fires on a genuine, rare, unrecoverable exception.
+                      'Hit a snag — try again, or start a new run if it keeps happening.'}
               </div>
             )}
 

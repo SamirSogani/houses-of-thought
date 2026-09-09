@@ -54,6 +54,12 @@ export interface RunState {
   perspectiveEvidenceStrategies?: EvidenceStrategy[] | null
   perspectiveEvidenceGatherUnits?: EvidenceGatherUnit[] | null
   perspectiveEvidenceGatherAnswers?: (EvidenceGatherUnitAnswers | null)[] | null
+  // 2026-09-09, Samir's spec — accumulated Q&A transcript across evidence-
+  // strategy regeneration rounds, keyed by perspective_id, so the next
+  // strategy call can be told what it already asked (route-schema.ts's
+  // perspectiveEvidenceGatherHistory; not itself part of stepDone below —
+  // it never gates a step, only enriches the next strategy prompt).
+  perspectiveEvidenceGatherHistory?: Record<string, string> | null
   perspectiveEvidenceDrafts?: EvidenceItemDraft[][] | null
   perspectives?: PerspectiveBundle[] | null
   perspectiveVerdicts?: ReviewPanelVerdict[] | null
@@ -68,6 +74,9 @@ export interface RunState {
   globalEvidenceStrategy?: EvidenceStrategy | null
   globalEvidenceGatherUnit?: EvidenceGatherUnit | null
   globalEvidenceGatherAnswer?: EvidenceGatherUnitAnswers | null
+  // 2026-09-09, Samir's spec — same idea as perspectiveEvidenceGatherHistory
+  // above, just for the ONE question-level unit.
+  globalEvidenceGatherHistory?: string | null
   globalEvidenceDraft?: GlobalEvidenceItemDraft[] | null
   globalEvidence?: GlobalEvidencePacket | null
   globalEvidenceVerdict?: ReviewPanelVerdict | null

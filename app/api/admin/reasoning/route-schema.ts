@@ -90,6 +90,17 @@ export const RunStateSchema = z.object({
   // — only the units that actually asked have an entry here). Starts as an
   // array of nulls once gather units are set, filled in as the admin answers.
   perspectiveEvidenceGatherAnswers: z.array(EvidenceGatherUnitAnswersSchema.nullable()).nullish(),
+  // 2026-09-09, Samir's spec — evidence-strategy's own memory across
+  // regeneration rounds (fixes "the model re-asks the same question 2-3
+  // rounds in a row": perspectiveEvidenceGatherAnswers above is single-round
+  // and overwritten on every fresh strategy call, so nothing durable used to
+  // survive a loop-back). Append-only, never cleared mid-run, accumulated
+  // client-side (useReasoningPipelineRunner.ts / ReasoningPipelinePage.tsx's
+  // resolvePendingEvidenceGather) — keyed by perspective_id (matches
+  // EvidenceGatherUnit.unitId for a perspective unit) so each perspective's
+  // own transcript only ever sees its own prior questions, never a
+  // sibling's.
+  perspectiveEvidenceGatherHistory: z.record(z.string(), z.string().max(2000)).nullish(),
   // evidence-populate's own output, index-aligned with perspectiveStances —
   // claim_id/source_ref/caveats, no confidence yet (that's the next step).
   perspectiveEvidenceDrafts: z.array(z.array(EvidenceItemDraftSchema)).nullish(),
@@ -115,6 +126,12 @@ export const RunStateSchema = z.object({
   globalEvidenceStrategy: EvidenceStrategySchema.nullish(),
   globalEvidenceGatherUnit: EvidenceGatherUnitSchema.nullish(),
   globalEvidenceGatherAnswer: EvidenceGatherUnitAnswersSchema.nullish(),
+  // 2026-09-09, Samir's spec — same fix as perspectiveEvidenceGatherHistory
+  // above, just for the ONE question-level unit: append-only, never cleared
+  // mid-run (route.ts's global-evidence-strategy case sets
+  // globalEvidenceGatherAnswer: null on every call — that single-round field
+  // is meant to reset; this one must not).
+  globalEvidenceGatherHistory: z.string().max(4000).nullish(),
   globalEvidenceDraft: z.array(GlobalEvidenceItemDraftSchema).nullish(),
   globalEvidence: GlobalEvidencePacketSchema.nullish(),
   globalEvidenceVerdict: ReviewPanelVerdictSchema.nullish(),
@@ -253,9 +270,27 @@ export function buildAdHocContext(run: RunState, atStep: StepId): string {
   return parts.join('\n\n')
 }
 
-export function degradedPerspectiveNotes(run: RunState): string[] {
-  if (!run.perspectiveVerdicts) return []
-  return run.perspectiveVerdicts
-    .map((v, i) => (v.degraded ? `${run.perspectives?.[i]?.stance_label ?? v.subject_id}: review panel did not pass` : null))
-    .filter((x): x is string => x !== null)
+// Renamed from degradedPerspectiveNotes (2026-09-09, Samir's spec): the 5
+// hard-block layers now degrade-and-continue instead of halting
+// (tryMasterReviewOrHalt, route.ts), so implications-generate's caveat list
+// needs a plain-language note for each of THOSE degradations too, not just a
+// per-perspective one. implicationsVerdict is deliberately NOT checked
+// here — implications-generate runs before implications-review, so it
+// can't know its own review outcome yet; the final-composition case handles
+// that one separately (extraCaveats, orchestrator-global.ts's
+// runFinalComposition).
+export function degradedLayerNotes(run: RunState): string[] {
+  const notes: string[] = []
+  if (run.frameVerdict?.degraded) notes.push('Frame: review panel did not fully pass.')
+  if (run.globalAssumptionsVerdict?.degraded) notes.push('Global assumptions: review panel did not fully pass.')
+  if (run.globalEvidenceVerdict?.degraded) notes.push('Global evidence: review panel did not fully pass.')
+  if (run.conclusionsVerdict?.degraded) notes.push('Conclusions: review panel did not fully pass.')
+  if (run.perspectiveVerdicts) {
+    notes.push(
+      ...run.perspectiveVerdicts
+        .map((v, i) => (v.degraded ? `${run.perspectives?.[i]?.stance_label ?? v.subject_id}: review panel did not pass` : null))
+        .filter((x): x is string => x !== null)
+    )
+  }
+  return notes
 }

@@ -187,7 +187,12 @@ export function ReasoningPipelineCard({
             ? RATE_LIMITED_COPY
             : runner.errorCode === 'ai-network-error'
               ? 'Network hiccup — check your connection and retry.'
-              : 'Could not reach the reasoning pipeline.'}
+              : // 2026-09-09, Samir's spec: softened from the old raw "Could
+                // not reach the reasoning pipeline." — now that
+                // TRANSIENT_ERROR_CODES (useReasoningPipelineRunner.ts) +
+                // Fix 2 Part A's degrade-and-continue mean this only fires
+                // on a genuine, rare, unrecoverable exception.
+                'Hit a snag — try again, or start a new run if it keeps happening.'}
         </div>
       )}
 

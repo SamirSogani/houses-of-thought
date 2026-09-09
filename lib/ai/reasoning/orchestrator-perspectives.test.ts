@@ -235,7 +235,7 @@ describe('runPerspectivesEvidenceStrategy', () => {
     const priorStrategies: EvidenceStrategy[] = [{ search_queries: ['x'], needs_user_input: false, questions_for_user: [], reason: 'prior' }]
     const priorPartials = [partial('p1', 'A')]
     const priorVerdicts = [verdict(true)] // already passed — settled
-    const strategies = await runPerspectivesEvidenceStrategy(frame, stances, false, false, { priorStrategies, priorPartials, priorVerdicts })
+    const strategies = await runPerspectivesEvidenceStrategy(frame, stances, false, false, null, { priorStrategies, priorPartials, priorVerdicts })
     expect(strategies[0]).toBe(priorStrategies[0])
     expect(completeJSONMock).not.toHaveBeenCalled()
   })

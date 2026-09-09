@@ -40,6 +40,7 @@ import {
   serializePerspectives,
   appendRegenerationFeedback,
   appendMasterGuidance,
+  formatGatherHistory,
 } from './prompts'
 import { REPAIR_TOKEN_HEADROOM } from './budget'
 
@@ -145,6 +146,12 @@ export async function runGlobalEvidenceStrategy(
   // single-unit pause UI can be exercised for free. No effect outside
   // dryRun.
   forceNeedsInput = false,
+  // 2026-09-09, Samir's spec — every real Q&A round this run's global
+  // evidence strategy has already asked/received, so a loop-back
+  // (global-evidence-review failing, route.ts's retryStep) doesn't re-ask the
+  // same or an overlapping question. See route-schema.ts's
+  // globalEvidenceGatherHistory for how this accumulates client-side.
+  priorGatherHistory?: string | null,
   repair?: Repair<GlobalEvidencePacket>,
   extraContext?: string | null,
   masterGuidance?: MasterGuided<GlobalEvidencePacket>
@@ -160,7 +167,7 @@ export async function runGlobalEvidenceStrategy(
     }
     return { search_queries: [], needs_user_input: false, questions_for_user: [], reason: '[dry run] no evidence strategy needed.' }
   }
-  const context = questionContext(frame, bundles, extraContext)
+  const context = questionContext(frame, bundles, extraContext) + formatGatherHistory(priorGatherHistory)
   return completeJSON({
     role: 'swarm',
     system: `${REASONING_PERSONA}\n\n${GLOBAL_EVIDENCE_STRATEGY_BLOCK}`,
@@ -394,16 +401,25 @@ export async function runFinalComposition(
   conclusions: ConclusionsPacket,
   implications: ImplicationsPacket,
   dryRun: boolean,
+  // 2026-09-09, Samir's spec — implications-review's own degraded flag,
+  // which implications-generate couldn't have known about when it wrote its
+  // own caveats_from_degraded_layers (implications hadn't been reviewed yet
+  // at that point). Set by route.ts/dispatch.ts's final-composition case
+  // from run.implicationsVerdict?.degraded. Folded in alongside (not instead
+  // of) implications' own degraded-upstream caveats everywhere those are
+  // used below.
+  extraCaveats?: string[],
   extraContext?: string | null
 ): Promise<FinalAnswer> {
   if (dryRun) {
     return {
       core_question: frame.core_question,
       answer: '[dry run] composed answer.',
-      caveats: implications.caveats_from_degraded_layers,
+      caveats: [...(extraCaveats ?? []), ...implications.caveats_from_degraded_layers].slice(0, 8),
     }
   }
-  const context = `${serializeFrame(frame, extraContext)}\n\n## Implications\n${implications.implications.map((i) => `- (${i.ikind}) ${i.text} — ${i.who}, ${i.horizon}`).join('\n')}\n\nConfidence: ${implications.confidence}${implications.caveats_from_degraded_layers.length ? `\nDegraded upstream: ${implications.caveats_from_degraded_layers.join('; ')}` : ''}`
+  const degradedNotes = [...(extraCaveats ?? []), ...implications.caveats_from_degraded_layers]
+  const context = `${serializeFrame(frame, extraContext)}\n\n## Implications\n${implications.implications.map((i) => `- (${i.ikind}) ${i.text} — ${i.who}, ${i.horizon}`).join('\n')}\n\nConfidence: ${implications.confidence}${degradedNotes.length ? `\nDegraded upstream: ${degradedNotes.join('; ')}` : ''}`
   try {
     return await completeJSON({
       role: 'synthesis',
@@ -437,7 +453,7 @@ export async function runFinalComposition(
     log.warn('ai/reasoning/orchestrator-global', 'final composition failed — using deterministic template', {
       error: (err as Error)?.message,
     })
-    return buildTemplateFinalAnswer(frame, conclusions, implications)
+    return buildTemplateFinalAnswer(frame, conclusions, implications, extraCaveats)
   }
 }
 
@@ -448,7 +464,8 @@ export async function runFinalComposition(
 function buildTemplateFinalAnswer(
   frame: FramePacket,
   conclusions: ConclusionsPacket,
-  implications: ImplicationsPacket
+  implications: ImplicationsPacket,
+  extraCaveats?: string[]
 ): FinalAnswer {
   const chain = conclusions.supporting_chain.length
     ? `\n\nReasoning chain: ${conclusions.supporting_chain.join(' → ')}`
@@ -459,9 +476,14 @@ function buildTemplateFinalAnswer(
   // WHOLE joined string at 3000, which several already-valid items joined
   // together could still exceed.
   const answer = raw.length > 3000 ? `${raw.slice(0, 2999)}…` : raw
+  // extraCaveats first (2026-09-09, Samir's spec): if FinalAnswerSchema.
+  // caveats' own max(8) forces something to drop, keep the newest/most-
+  // specific fact (implications' own review just struggled) over an older
+  // upstream-degraded note.
+  const caveats = [...(extraCaveats ?? []), ...implications.caveats_from_degraded_layers].slice(0, 8)
   return {
     core_question: frame.core_question,
     answer,
-    caveats: implications.caveats_from_degraded_layers,
+    caveats,
   }
 }
