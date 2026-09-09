@@ -168,7 +168,8 @@ export function ReasoningPipelineCard({
 
       {runner.retryInfo && (
         <div style={{ fontSize: 11.5, color: 'var(--amber-text)', marginTop: 10, lineHeight: 1.4 }}>
-          Upstream provider rate-limited — retrying in {Math.round(runner.retryInfo.waitMs / 1000)}s…
+          {runner.retryInfo.reason === 'rate-limited' ? 'Upstream provider rate-limited' : 'Network hiccup'} — retrying in{' '}
+          {Math.round(runner.retryInfo.waitMs / 1000)}s…
         </div>
       )}
 

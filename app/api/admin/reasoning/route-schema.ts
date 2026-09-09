@@ -38,7 +38,17 @@ import {
 } from '@/lib/ai/reasoning/contracts'
 
 export const RunStateSchema = z.object({
-  originalQuery: z.string().min(1).max(2000),
+  // 2000 -> 100_000 (2026-09-09, Samir's call, "for now" — not a considered
+  // ceiling, just generous headroom): this app exists to reason about hard,
+  // detailed questions, and a genuinely hard question routinely runs past
+  // 2000 characters — the co-pilot's question textarea has no client-side
+  // limit at all, so the old cap meant a sufficiently thorough question
+  // 400'd here with no useful message (just "Could not reach the reasoning
+  // pipeline"), real-verified live the same session this was raised. Must
+  // stay in sync with contracts.ts's originalQueryStr, which mirrors this
+  // exact ceiling for FramePacketSchema.original_query — see that constant's
+  // own comment for why they have to match.
+  originalQuery: z.string().min(1).max(100_000),
   contextGatherPre: ContextGatherVerdictSchema.nullish(),
   // Phase 3 item 1 (decision 019): the admin's answers to contextGatherPre's
   // questions_for_user, same index alignment. Threaded into frame-generate's

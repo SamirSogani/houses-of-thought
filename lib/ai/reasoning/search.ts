@@ -38,9 +38,15 @@ export const MAX_SEARCH_ROUNDS = 2
 const MAX_DESCRIPTION_CHARS = 200
 const MAX_FINDINGS_CHARS = 3800
 
-// Sequential, not Promise.all: Brave's free tier is 1 rps (lib/ai/brave.ts).
-// A failed query is dropped, not thrown — losing one search result shouldn't
-// fail an entire generate step that already has a model-drafted fallback.
+// Sequential, not Promise.all, within this one call's own queries — but that
+// alone doesn't keep the WHOLE process under Brave's 1 rps: the reasoning
+// pipeline runs several of these calls concurrently, one per perspective
+// (orchestrator-perspectives.ts's fanOutTracked), so pacing has to be global,
+// not per-call. That global gate now lives in braveSearch itself
+// (lib/ai/brave.ts's waitForBraveSlot) — every call from every concurrent
+// branch shares one queue, so nothing extra is needed here. A failed query
+// is dropped, not thrown — losing one search result shouldn't fail an entire
+// generate step that already has a model-drafted fallback.
 export async function runSearches(queries: string[]): Promise<string> {
   const blocks: string[] = []
   for (const q of queries) {
@@ -58,8 +64,6 @@ export async function runSearches(queries: string[]): Promise<string> {
         error: (err as Error)?.message,
       })
     }
-    // Stay under Brave's 1 rps even when a query above returned instantly.
-    await new Promise((resolve) => setTimeout(resolve, 1100))
   }
   const joined = blocks.join('\n\n') || '(no results found)'
   return joined.length > MAX_FINDINGS_CHARS ? `${joined.slice(0, MAX_FINDINGS_CHARS)}…` : joined

@@ -92,7 +92,11 @@ export interface ReasoningPipelineRunner {
   errorCode: string | null
   subElementFailures: SubElementFailure[] | null
   haltReason: string | null
-  retryInfo: { attempt: number; waitMs: number } | null
+  // reason distinguishes an upstream 429 from a client-side fetch exception
+  // (2026-09-09) so the UI can show accurate copy for each — see the catch
+  // block below for why a network error now retries the same way a
+  // rate-limit already did.
+  retryInfo: { attempt: number; waitMs: number; reason: 'rate-limited' | 'network' } | null
   regenerationInfo: { attempt: number } | null
   // Loop C (plan doc 31) — true for the run currently in `run`/`phase` iff
   // it was started via rerunSandbox(), not start()/rerunFrom(). Reactive
@@ -138,7 +142,9 @@ export function useReasoningPipelineRunner(
   const [errorCode, setErrorCode] = useState<string | null>(null)
   const [subElementFailures, setSubElementFailures] = useState<SubElementFailure[] | null>(null)
   const [haltReason, setHaltReason] = useState<string | null>(null)
-  const [retryInfo, setRetryInfo] = useState<{ attempt: number; waitMs: number } | null>(null)
+  const [retryInfo, setRetryInfo] = useState<{ attempt: number; waitMs: number; reason: 'rate-limited' | 'network' } | null>(
+    null
+  )
   const [regenerationInfo, setRegenerationInfo] = useState<{ attempt: number } | null>(null)
   // Loop C (plan doc 31) — reactive twin of sandboxModeRef below, for
   // rendering; see the interface's own doc comment.
@@ -199,7 +205,7 @@ export function useReasoningPipelineRunner(
             const code = body.error ?? 'ai-upstream-error'
             const waitMs = RATE_LIMIT_RETRY_DELAYS_MS[attempt - 1]
             if (code === 'ai-rate-limited' && waitMs !== undefined) {
-              setRetryInfo({ attempt, waitMs })
+              setRetryInfo({ attempt, waitMs, reason: 'rate-limited' })
               await new Promise((resolve) => setTimeout(resolve, waitMs))
               if (cancelled) return
               continue
@@ -299,6 +305,26 @@ export function useReasoningPipelineRunner(
           return
         } catch (err) {
           if ((err as Error)?.name === 'AbortError' || cancelled) return
+          // Auto-retry a bare fetch() exception the same bounded way a 429
+          // already does (2026-09-09, real-verified on production traffic
+          // from a phone: a single step here can legitimately hold the
+          // connection open for minutes — swarm/synthesis's own DeepInfra
+          // timeout runs up to 240s, router-lanes.ts's
+          // DEEPINFRA_SWARM_LARGE_TIMEOUT_MS — with no bytes sent until the
+          // very end, since this route doesn't stream. Mobile networks and
+          // carrier/proxy idle timeouts are far more likely than desktop
+          // broadband to kill a connection that looks silent that long, and
+          // every prior "Could not reach the pipeline" this session hit
+          // succeeded cleanly on a bare retry — so a transient network drop
+          // should get the same automatic second chance a rate limit does,
+          // not force the person to notice and click Retry themselves).
+          const waitMs = RATE_LIMIT_RETRY_DELAYS_MS[attempt - 1]
+          if (waitMs !== undefined) {
+            setRetryInfo({ attempt, waitMs, reason: 'network' })
+            await new Promise((resolve) => setTimeout(resolve, waitMs))
+            if (cancelled) return
+            continue
+          }
           setRetryInfo(null)
           setErrorCode('ai-network-error')
           setPhase('paused')

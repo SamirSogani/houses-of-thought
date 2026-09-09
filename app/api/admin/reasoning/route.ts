@@ -745,8 +745,8 @@ export async function POST(req: Request): Promise<Response> {
       }
 
       case 'final-composition': {
-        if (!run.frame || !run.implications) return missing('frame/implications')
-        const finalAnswer = await runFinalComposition(run.frame, run.implications, dryRun, extraContext)
+        if (!run.frame || !run.conclusions || !run.implications) return missing('frame/conclusions/implications')
+        const finalAnswer = await runFinalComposition(run.frame, run.conclusions, run.implications, dryRun, extraContext)
         return ok(step, { finalAnswer })
       }
 

@@ -11,14 +11,26 @@
 
 import { z } from 'zod'
 
-const str = z.string().min(1).max(600)
+// 600 -> 900 (2026-09-09, Claude, real-verified live): core_question
+// (FramePacketSchema/FinalAnswerSchema below), cross_perspective_notes, and
+// question_level_assumptions items (GlobalAssumptionsPacketSchema below) all
+// hit this cap on real DeepSeek-V4-Flash-0731 traffic in the same session —
+// same failure shape as scope_notes/rebuttals/notes below, same fix. Paired
+// with prompts.ts changes (FRAME_BLOCK, GLOBAL_ASSUMPTIONS_BLOCK,
+// REASONING_PERSONA's new anti-meta-commentary rule) addressing the other
+// half of that failure: the model wasn't just running long, it was padding
+// fields with parenthetical notes about its own compression choices.
+const str = z.string().min(1).max(900)
 // scope_notes asks for a lot in one field (FRAME_BLOCK, lib/ai/reasoning/
 // prompts.ts: practical/social/economic/procedural angles, a spectrum-of-
 // options note, an out-of-scope note) — the shared 600-char `str` cap
 // rejected well-formed output that genuinely needed the room, surfaced live
 // (2026-07-31) on a regeneration attempt: same failure pattern as
-// SingleStandardVerdictSchema.notes below, same fix.
-const scopeNotesStr = z.string().min(1).max(1400)
+// SingleStandardVerdictSchema.notes below, same fix. 1400 -> 2000
+// (2026-09-09, Claude, real-verified live): failed again at 1400 on real
+// DeepSeek-V4-Flash-0731 traffic — see the `str` comment above for the full
+// incident this and the other bumps in this file were part of.
+const scopeNotesStr = z.string().min(1).max(2000)
 // rebuttals asks for substantive, specific reasoning per targeted claim ("name
 // exactly what is wrong or weak"), not a generic complaint — same failure
 // shape as SingleStandardVerdictSchema.notes below, surfaced live (2026-07-31)
@@ -36,17 +48,22 @@ const searchFindingsStr = z.string().min(1).max(4000)
 // orchestrator-setup.ts, returns `{ ...modelOut, original_query: originalQuery
 // }` with no re-validation). It must therefore match its actual source's own
 // ceiling — RunStateSchema.originalQuery (app/api/admin/reasoning/route-
-// schema.ts) is z.string().min(1).max(2000) — not the generic 600-char `str`
-// meant for constrained model output. 2026-08-20, Claude, real-verified live
-// on production (housesofthought.org): any question over 600 characters (no
-// client-side limit exists on the co-pilot's question textarea) generated a
-// frame successfully, then hard-failed on the very next request — frame-
+// schema.ts) is z.string().min(1).max(100_000) — not the generic 600-char
+// `str` meant for constrained model output. 2026-08-20, Claude, real-verified
+// live on production (housesofthought.org): any question over 600 characters
+// (no client-side limit exists on the co-pilot's question textarea) generated
+// a frame successfully, then hard-failed on the very next request — frame-
 // review — with a 400 on this exact field, every single time; retry re-posted
 // the same too-long value and failed identically in well under 100ms (no AI
 // call reached), which is also why retry barely appeared to try. Same bug
 // shape as the EvidencePopulateSchema/PerspectiveBundleSchema cap mismatch
-// fixed earlier the same day, different field.
-const originalQueryStr = z.string().min(1).max(2000)
+// fixed earlier the same day, different field. 2000 -> 100_000 (2026-09-09,
+// Samir's call): the 2000 ceiling itself turned out to be the same class of
+// bug one level up — a genuinely hard, detailed question this app exists to
+// reason about routinely runs past 2000 characters, and the co-pilot gave no
+// warning at all before silently 400ing with no useful message. 100_000 is
+// "for now" (Samir's words) — generous headroom, not a considered ceiling.
+const originalQueryStr = z.string().min(1).max(100_000)
 const HorizonSchema = z.enum(['Near-term', 'Long-term'])
 const ConfidenceSchema = z.enum(['low', 'medium', 'high'])
 
@@ -208,6 +225,23 @@ export const GlobalEvidencePopulateSchema = z.object({ evidence: z.array(GlobalE
 // need more room than populate's own cap.
 export const EvidenceConfidenceSchema = z.object({
   confidence: z.array(z.object({ claim_id: str, confidence: ConfidenceSchema })).max(6),
+})
+
+// Global's own variant (2026-09-09, Claude, real-verified live): the
+// perspective-level EvidenceConfidenceSchema above was capped max(8) -> max(6)
+// to match EvidencePopulateSchema's own max(6) — correct for perspectives,
+// but runGlobalEvidenceConfidence (orchestrator-global.ts) was reusing that
+// SAME max(6) schema for GLOBAL evidence, which is drafted by
+// GlobalEvidencePopulateSchema's own max(8) above — a real, structural cap
+// mismatch this codebase already has a name for (see EvidencePopulateSchema's
+// own comment for the near-identical bug it fixed one level up): a
+// global-evidence-populate call that legitimately drafted 7-8 items could
+// NEVER validate its own confidence-scoring step, every single time, not
+// intermittently. Split out so each path's confidence cap matches its own
+// populate step's cap — the same discipline EvidencePopulateSchema /
+// GlobalEvidencePopulateSchema already follow for the step before this one.
+export const GlobalEvidenceConfidenceSchema = z.object({
+  confidence: z.array(z.object({ claim_id: str, confidence: ConfidenceSchema })).max(8),
 })
 
 // ── Perspectives (the one fan-out layer) ────────────────────────────────────
