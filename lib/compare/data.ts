@@ -72,6 +72,58 @@ export const HUB_ROWS: { dimension: string; houses: string; rationaleStyle: stri
 ]
 
 export const COMPETITORS: Record<string, Competitor> = {
+  chatgpt: {
+    slug: 'chatgpt',
+    name: 'ChatGPT',
+    shortName: 'ChatGPT',
+    status: 'Not a dedicated decision tool',
+    eyebrow: 'Already using ChatGPT to think this through?',
+    headline: 'How Houses of Thought is different from just asking ChatGPT.',
+    intro:
+      "ChatGPT can talk through a hard decision with you, but it wasn't built to. It has no fixed method, no review step, and nothing stopping it from just telling you the answer. Houses of Thought is built around one job: walk you through a decision using a named methodology, check its own reasoning before moving on, and leave the actual conclusion to you.",
+    rows: [
+      {
+        dimension: 'Price',
+        houses: 'Free: no paid tier, ever',
+        them: 'Free tier exists, but stronger models and longer context sit behind a paid plan',
+      },
+      {
+        dimension: 'How a decision gets reasoned through',
+        houses: 'Seven fixed layers: Frame, Breadth Scoping, Perspectives, Global Assumptions, Global Evidence, Conclusions, Implications',
+        them: 'Whatever the conversation happens to cover — depends entirely on how you prompt it',
+      },
+      {
+        dimension: 'Checking its own work',
+        houses: 'Six of the seven layers are graded by nine independent reviewers each, one per standard, before the run continues',
+        them: 'None: one pass, no self-check, no adversarial review',
+      },
+      {
+        dimension: 'Who reaches the conclusion',
+        houses: 'You build the conclusion yourself; the AI guides, it never decides for you',
+        them: 'Will tell you what to do if you ask it to, whether or not that serves your thinking',
+      },
+      {
+        dimension: 'Agreement bias',
+        houses: 'Structured to surface counter-perspectives and name assumptions regardless of the framing you bring',
+        them: 'General-purpose chat models are known to lean toward agreeing with the framing you give them',
+      },
+      {
+        dimension: 'What you can see',
+        houses: 'Every layer, every standard verdict, and every retry is visible',
+        them: 'The finished message only — no visibility into what was considered and dropped',
+      },
+      {
+        dimension: 'Where the method comes from',
+        houses: "A named classroom framework: John Trapasso's model, derived from Paul–Elder's Universal Intellectual Standards",
+        them: 'No decision-specific methodology — a general-purpose assistant applied to whatever you ask',
+      },
+      {
+        dimension: 'What you end up with',
+        houses: 'A saved, structured house you can revisit or share as a record of the reasoning',
+        them: "A chat thread, not built to be a citable artifact of how you reasoned",
+      },
+    ],
+  },
   rationale: {
     slug: 'rationale',
     name: 'Rationale by Jina AI',
