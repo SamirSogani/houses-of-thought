@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 // /classes included (bl-L6): signed-out visitors used to get a client-side
 // bounce with no ?next= return path, unlike every sibling authed route.
-const PROTECTED_PREFIXES = ['/dashboard', '/build', '/profile', '/classroom', '/classes', '/join']
+const PROTECTED_PREFIXES = ['/dashboard', '/build', '/profile', '/classroom', '/classes', '/join', '/projects']
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })

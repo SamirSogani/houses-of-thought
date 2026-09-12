@@ -16,6 +16,7 @@ import type {
   Implication,
   AiContext,
 } from '@/lib/build/types'
+import { formatProjectContextLines, type ProjectContext } from '@/lib/projects/data'
 
 // The persistable subset of State, as parsed back from serializeContent. Optional
 // aiContext / mode are populated by later phases; harmless to render now.
@@ -65,7 +66,19 @@ function section(lines: string[]): string {
   return lines.length > 0 ? lines.join('\n') : '— (empty)'
 }
 
-export function serializeHouseForPrompt(content: HouseForPrompt, focusStep?: number): string {
+// Business mode (decision 021, Phase 3, plans/active/business-mode/
+// 03-accumulating-context.md): an extension of the CONTEXT (from interview)
+// mechanism just below, not a new injection point — same section shape, same
+// clip/cap discipline, just a second optional source the model reads the
+// same way. `projectContext` is caller-supplied (Collab routes have no DB
+// access to the house by design — invariant 4); RLS is what actually gates
+// which project a caller may ever see, same trust boundary as `content`
+// itself, which every one of these routes already accepts wholesale.
+export function serializeHouseForPrompt(
+  content: HouseForPrompt,
+  focusStep?: number,
+  projectContext?: ProjectContext | null
+): string {
   const out: string[] = []
 
   const header = (step: number, label: string) => {
@@ -80,6 +93,11 @@ export function serializeHouseForPrompt(content: HouseForPrompt, focusStep?: num
     for (const f of (content.aiContext.facts ?? []).slice(0, MAX_FACTS)) {
       out.push(`- ${clip(f, ITEM)}`)
     }
+  }
+  const projectLines = formatProjectContextLines(projectContext, MAX_FACTS)
+  if (projectLines.length > 0) {
+    out.push('\n## CONTEXT (from project)')
+    for (const line of projectLines) out.push(clip(line, ITEM))
   }
 
   // Layer 1 — Frame: purpose, question, concepts.

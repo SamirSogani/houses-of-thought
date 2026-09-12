@@ -32,6 +32,7 @@ import { ReasoningStagesList } from '@/components/admin/reasoning/ReasoningStage
 import { ContextGatherAnswerBox } from '@/components/admin/reasoning/ContextGatherAnswerBox'
 import { EvidenceGatherAnswerBox } from '@/components/admin/reasoning/EvidenceGatherAnswerBox'
 import type { ReasoningPipelineRunner } from '../useReasoningPipelineRunner'
+import { SaveFactsToProjectButton } from '../SaveToProjectButton'
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--parchment)',
@@ -265,17 +266,25 @@ export function ReasoningConclusionSuggestion({
           </li>
         ))}
       </ul>
-      <button
-        type="button"
-        onClick={() => {
-          dispatch({ type: 'SET_CONCLUSION', value: conclusions.conclusions.join('\n\n') })
-          dispatch({ type: 'SET_REASONING', value: finalAnswer.answer })
-          dispatch({ type: 'SET_TOAST', value: 'Conclusion adopted — edit it freely, it is yours now' })
-        }}
-        style={primaryBtn}
-      >
-        Use as my conclusion
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+        <button
+          type="button"
+          onClick={() => {
+            dispatch({ type: 'SET_CONCLUSION', value: conclusions.conclusions.join('\n\n') })
+            dispatch({ type: 'SET_REASONING', value: finalAnswer.answer })
+            dispatch({ type: 'SET_TOAST', value: 'Conclusion adopted — edit it freely, it is yours now' })
+          }}
+          style={primaryBtn}
+        >
+          Use as my conclusion
+        </button>
+        {/* Business mode (decision 021, Phase 3): the pipeline's own conclusion
+            is exactly the kind of durable fact worth carrying up into the
+            project — self-hides when there's no project. */}
+        {state.projectId && (
+          <SaveFactsToProjectButton projectId={state.projectId} facts={conclusions.conclusions} />
+        )}
+      </div>
     </div>
   )
 }

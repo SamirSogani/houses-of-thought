@@ -14,13 +14,16 @@ import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { capabilitiesFor, type Capabilities } from '@/lib/auth/capabilities'
-import type { AccountType } from '@/lib/profile/data'
+import type { AccountType, WorkspaceMode } from '@/lib/profile/data'
 
 export interface AuthedPage {
   // null while loading; the proxy guarantees a user on protected routes, so a
   // persistent null means the session died — pages may redirect on `resolved`.
   user: User | null
   accountType: AccountType
+  // Business/solo-founder mode (decision 021) — UI framing only, never a
+  // capability; see lib/auth/capabilities.ts, which this must never join.
+  workspaceMode: WorkspaceMode
   caps: Capabilities
   resolved: boolean
   signOut: () => Promise<void>
@@ -29,6 +32,7 @@ export interface AuthedPage {
 export function useAuthedPage(): AuthedPage {
   const [user, setUser] = useState<User | null>(null)
   const [accountType, setAccountType] = useState<AccountType>('standard')
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('general')
   const [resolved, setResolved] = useState(false)
 
   useEffect(() => {
@@ -45,12 +49,13 @@ export function useAuthedPage(): AuthedPage {
       }
       const { data: profile } = await supabase
         .from('profiles')
-        .select('account_type')
+        .select('account_type, workspace_mode')
         .eq('id', user.id)
         .single()
       if (!active) return
       setUser(user)
       setAccountType((profile?.account_type as AccountType) ?? 'standard')
+      setWorkspaceMode((profile?.workspace_mode as WorkspaceMode) ?? 'general')
       setResolved(true)
     })()
     return () => {
@@ -60,7 +65,7 @@ export function useAuthedPage(): AuthedPage {
 
   const signOut = useSignOut()
 
-  return { user, accountType, caps: capabilitiesFor(accountType), resolved, signOut }
+  return { user, accountType, workspaceMode, caps: capabilitiesFor(accountType), resolved, signOut }
 }
 
 // Standalone sign-out for pages with bespoke load flows (e.g. the build route's

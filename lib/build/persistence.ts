@@ -94,6 +94,8 @@ export function blankState(): State {
     unc: [],
     watchpoints: [],
     activePerspective: null,
+    projectId: null,
+    projectContext: null,
   }
 }
 

@@ -37,7 +37,9 @@ import { NextResponse, after } from 'next/server'
 import { z } from 'zod'
 import { AiError } from '@/lib/ai/router'
 import { createClient } from '@/lib/supabase/server'
-import { getCallerCapabilities } from '@/lib/auth/account'
+import { getCallerCapabilities, getCallerWorkspaceMode } from '@/lib/auth/account'
+import { getProject, formatProjectContextLines } from '@/lib/projects/data'
+import { retrieveProjectChunks, formatRagChunksForPrompt } from '@/lib/ai/rag'
 import { log } from '@/lib/log'
 import { type StepId, type PipelineMode, nextStepForMode, isReviewStep, STEP_FAILURE_MODE } from '@/lib/ai/reasoning/steps'
 import { MAX_N_PHASE1 } from '@/lib/ai/reasoning/budget'
@@ -176,6 +178,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: authz.error }, { status: authz.status })
   }
 
+  // Business mode (decision 021): the CALLER's own workspace_mode, read once
+  // from their profile — never from the request body. This is the one real
+  // end-user-driven pipeline surface (the admin route has no per-caller
+  // concept and is deliberately left untouched — plan doc 27).
+  const workspaceMode = await getCallerWorkspaceMode()
+
   // ── From here down: same step dispatcher as app/api/admin/reasoning/
   // route.ts, gating already done above. ─────────────────────────────────
   const raw = await req.text()
@@ -254,7 +262,74 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
-  const extraContext = buildExtraContext(run)
+  // Business mode (decision 021, Phases 3/5, plans/active/business-mode/
+  // 03-accumulating-context.md / 05-rag-retrieval.md): fold the owning
+  // project's accumulated context AND RAG-retrieved chunks into extraContext
+  // — the SAME mechanism every layer below already reads (frame-generate
+  // through final-composition all take extraContext), so this needs no new
+  // plumbing through dispatch.ts's StepDispatchContext.
+  //
+  // Computed ONCE per run, not once per step. This route gets one POST per
+  // pipeline step (~20 for a thorough run) and the client resends the whole
+  // `run` object each time, so `run.businessContext` already being set means
+  // a prior step computed it — reuse it outright instead of repeating a
+  // project lookup and (when gated on) an embedding-API round trip on every
+  // single step. Latency and cost both mattered here: this was previously
+  // recomputed unconditionally on every step. The cache is carried forward
+  // to the client via ok()/retryStep()/halted() below, which merge it into
+  // whichever patch they return exactly once — from then on the client's own
+  // resent `run` already has it, same mechanism as `frame`/`breadthScoping`/
+  // every other field a specific step computes once and everything after
+  // just reads.
+  // .nullish() admits both null and undefined (zod, route-schema.ts) — this
+  // route only ever writes a concrete object once computed, so either means
+  // "not computed yet" here.
+  let businessContext = run.businessContext
+  // True only on the one request that actually computed it — ok()/
+  // retryStep()/halted() below check this to know whether to fold it into
+  // the outgoing patch (once) or leave it out (the client already has it).
+  const businessContextFresh = businessContext == null
+  if (businessContext == null) {
+    let projectContextText: string | null = null
+    const { data: houseProjectRow } = await supabase.from('houses').select('project_id').eq('id', houseId).maybeSingle()
+    const projectId = houseProjectRow?.project_id ?? null
+    if (projectId) {
+      try {
+        const project = await getProject(supabase, projectId)
+        const lines = formatProjectContextLines(project?.context)
+        if (lines.length > 0) projectContextText = `## CONTEXT (from project)\n${lines.join('\n')}`
+      } catch {
+        // Best-effort — a lookup failure (archived project, RLS denies it)
+        // just means no project context this run, same as a house with none.
+        projectContextText = null
+      }
+    }
+
+    // RAG retrieval: its own distinctly-labeled section
+    // (formatRagChunksForPrompt), never merged into projectContextText.
+    // Gated on business mode ONLY: a general-mode caller incurs ZERO
+    // embedding-generation cost here, full stop, regardless of whether the
+    // house has a project (the plan doc's own explicit manual-verification
+    // bullet) — checked before the projectId branch even runs a query
+    // embedding.
+    let ragText: string | null = null
+    if (workspaceMode === 'business' && projectId && run.originalQuery.trim()) {
+      try {
+        const chunks = await retrieveProjectChunks(supabase, projectId, run.originalQuery, 5)
+        const formatted = formatRagChunksForPrompt(chunks)
+        if (formatted) ragText = formatted
+      } catch (err) {
+        log.error('houses/reasoning', 'RAG retrieval failed', { error: (err as Error)?.message })
+      }
+    }
+
+    businessContext = { projectContextText, ragText }
+  }
+
+  const extraContext =
+    [buildExtraContext(run), businessContext.projectContextText, businessContext.ragText]
+      .filter((s): s is string => !!s)
+      .join('\n\n') || null
 
   // Same persistence pattern as the admin route (see its own header comment
   // for the after()/Vercel-timing rationale) — the only difference is the
@@ -278,10 +353,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     )
   }
 
+  // Folds the freshly-computed businessContext into a patch exactly once —
+  // on whichever step's response happens to go out first. Every function
+  // below that can carry a run forward (ok/retryStep/halted) routes its
+  // patch through this, so the client's own resent `run` picks it up
+  // regardless of which step got there first, and every step after that
+  // finds run.businessContext already set and skips recomputing it.
+  function withBusinessContext(patch: Record<string, unknown>): Record<string, unknown> {
+    return businessContextFresh ? { ...patch, businessContext } : patch
+  }
+
   function ok(step: StepId, patch: Record<string, unknown>): Response {
+    const finalPatch = withBusinessContext(patch)
     const nextStep = nextStepForMode(step, mode)
-    persist(step, patch, nextStep, false)
-    return NextResponse.json({ step, patch, nextStep, halted: false })
+    persist(step, finalPatch, nextStep, false)
+    return NextResponse.json({ step, patch: finalPatch, nextStep, halted: false })
   }
 
   function perspectivesFanOutFailure(step: StepId, err: PerspectivesGenerateError): Response {
@@ -301,8 +387,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         { status: 400 }
       )
     }
-    persist(step, patch, generateStep, false)
-    return NextResponse.json({ step, patch, nextStep: generateStep, halted: false, retry: true })
+    const finalPatch = withBusinessContext(patch)
+    persist(step, finalPatch, generateStep, false)
+    return NextResponse.json({ step, patch: finalPatch, nextStep: generateStep, halted: false, retry: true })
   }
 
   function halted(step: StepId, verdict: ReviewPanelVerdict, patch: Record<string, unknown>): Response {
@@ -311,8 +398,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     const failing = failingStandardIds(verdict)
     const haltReason = `${step} failed review after ${attempt} attempt${attempt === 1 ? '' : 's'}${run.masterReview?.forStep === step ? ' (including one master-reviewer-guided attempt)' : ''} — ${failing.length}/9 standards still failing (${failing.join(', ')}).`
-    persist(step, patch, null, true, haltReason)
-    return NextResponse.json({ step, patch, nextStep: null, halted: true, haltReason })
+    const finalPatch = withBusinessContext(patch)
+    persist(step, finalPatch, null, true, haltReason)
+    return NextResponse.json({ step, patch: finalPatch, nextStep: null, halted: true, haltReason })
   }
 
   // verdictField (was `patch: Record<string, unknown>`, 2026-09-09, Samir's
@@ -351,6 +439,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       devForceNeedsInput,
       extraContext,
       mode,
+      workspaceMode,
       ok,
       persist,
       retryStep,

@@ -4,6 +4,11 @@
 
 export type AccountType = 'standard' | 'student' | 'teacher'
 
+// Business/solo-founder mode (decision 021). A preference, not a privilege —
+// unlike account_type it must never be read by RLS or capabilitiesFor
+// (lib/auth/capabilities.ts); it only changes which UI sections render.
+export type WorkspaceMode = 'general' | 'business'
+
 export interface AccountTypeMeta {
   key: AccountType
   name: string
@@ -67,6 +72,7 @@ export const perspectiveFields: PerspectiveMeta[] = [
 export interface ProfileData {
   username: string
   accountType: AccountType
+  workspaceMode: WorkspaceMode
   aboutMe: string
   currentProject: string
   role: string
@@ -79,6 +85,7 @@ export interface ProfileData {
 export interface ProfileRow {
   username: string | null
   account_type: AccountType
+  workspace_mode: WorkspaceMode
   about_me: string
   current_project: string
   role: string
@@ -92,6 +99,7 @@ export function rowToProfile(row: ProfileRow | null): ProfileData {
   return {
     username: row?.username ?? '',
     accountType: row?.account_type ?? 'standard',
+    workspaceMode: row?.workspace_mode ?? 'general',
     aboutMe: row?.about_me ?? '',
     currentProject: row?.current_project ?? '',
     role: row?.role ?? '',
@@ -111,6 +119,7 @@ export function profileToRow(p: ProfileData): ProfileRow {
   return {
     username: p.username || null,
     account_type: p.accountType,
+    workspace_mode: p.workspaceMode,
     about_me: p.aboutMe,
     current_project: p.currentProject,
     role: p.role,
@@ -122,6 +131,8 @@ export function profileToRow(p: ProfileData): ProfileRow {
 // The AUTOSAVE payload (bl-H3). Deliberately narrower than profileToRow:
 //   - no account_type — it's written only by the selector's explicit change, so
 //     a stale tab's autosave can never silently revert a switch made elsewhere;
+//   - workspace_mode IS included — unlike account_type it's a plain preference
+//     (decision 021 §2), self-editable the same way about_me is;
 //   - username only when locally valid AND not a name the DB already rejected
 //     as taken — otherwise one bad username froze (or 23505-rejected) every
 //     other field's save while the header claimed "All changes saved".
@@ -130,6 +141,7 @@ export function autosaveRow(
   knownTaken: string | null
 ): Partial<ProfileRow> {
   const row: Partial<ProfileRow> = {
+    workspace_mode: p.workspaceMode,
     about_me: p.aboutMe,
     current_project: p.currentProject,
     role: p.role,

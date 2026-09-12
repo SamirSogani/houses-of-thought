@@ -10,11 +10,12 @@ import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
 import { BulkDeleteModal } from '@/components/dashboard/BulkDeleteModal'
 import Footer from '@/components/sections/Footer'
 import { rowToSummary, type HouseRow, type HouseSummary } from '@/lib/dashboard/houses'
+import { listProjects, type ProjectRow } from '@/lib/projects/data'
 import { useAuthedPage, CenterNotice } from '@/components/useAuthedPage'
 import { StudentAssignments } from '@/components/classroom/StudentAssignments'
 
 // Columns selected for the grid — keep in sync with HouseRow.
-const HOUSE_COLUMNS = 'id, title, question, status, layers_complete, updated_at, assignment_id, turned_in, draft, share_token'
+const HOUSE_COLUMNS = 'id, title, question, status, layers_complete, updated_at, assignment_id, turned_in, draft, share_token, project_id'
 // Shared-with-you houses never expose share_token (Mechanism 2 is owner-only)
 // or draft-gate state (turn-in doesn't apply to someone else's house).
 const SHARED_HOUSE_COLUMNS = 'id, title, question, status, layers_complete, updated_at'
@@ -22,8 +23,11 @@ const SHARED_HOUSE_COLUMNS = 'id, title, question, status, layers_complete, upda
 export default function DashboardPage() {
   const router = useRouter()
   // Shared authed scaffold: user + account type + capabilities + signOut.
-  const { accountType, caps, signOut } = useAuthedPage()
+  const { accountType, workspaceMode, caps, signOut } = useAuthedPage()
   const [houses, setHouses] = useState<HouseSummary[] | null>(null)
+  // Business mode (decision 021): grouping only kicks in once the user has
+  // created at least one project — null while loading, [] for "none yet".
+  const [projects, setProjects] = useState<ProjectRow[] | null>(null)
   // Mechanism 1 ("Invite"): houses owned by someone else where the signed-in
   // user is a house_collaborators row — labeled distinctly, never merged into
   // "Your Houses" (plan doc step 4).
@@ -126,6 +130,23 @@ export default function DashboardPage() {
     )
   }, [])
 
+  // Business mode (decision 021): loaded regardless of workspace_mode — the
+  // dashboard groups by project whenever the user HAS projects, not only while
+  // the toggle is on, so flipping it back off doesn't hide already-grouped work.
+  const loadProjects = useCallback(async () => {
+    const supabase = createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return
+    try {
+      setProjects(await listProjects(supabase, user.id))
+    } catch (err) {
+      console.error('Failed to load projects:', err)
+      setProjects([])
+    }
+  }, [])
+
   useEffect(() => {
     if (accountType !== 'standard') return
     ;(async () => {
@@ -139,7 +160,8 @@ export default function DashboardPage() {
   useEffect(() => {
     loadHouses()
     loadSharedHouses()
-  }, [loadHouses, loadSharedHouses])
+    loadProjects()
+  }, [loadHouses, loadSharedHouses, loadProjects])
 
   // draft=true routes into Draft Mode (decision 016): same blank house, but the
   // workspace opens with the AI-draft flow (?draft=1).
@@ -322,12 +344,64 @@ export default function DashboardPage() {
   // see it (and the route re-checks server-side).
   const canDraft = caps.canAuthorDraft
 
+  // Business mode (decision 021): group by project once the user has any,
+  // regardless of whether the toggle is currently on (plans/active/business-mode/
+  // 01-projects-and-toggle.md — don't force project-first navigation on users
+  // with zero projects, and don't hide already-grouped work if they flip back).
+  const hasProjects = (projects?.length ?? 0) > 0
+
+  function renderHouseCard(h: HouseSummary) {
+    const isContinueHouse = h.id === continueHouseId
+    return (
+      <HouseCard
+        key={h.id}
+        house={h}
+        href={`/build/${h.id}`}
+        graded={gradedIds.has(h.id)}
+        selectable={selectable && !isContinueHouse}
+        selected={selectedIds.has(h.id)}
+        onToggle={toggleSelect}
+        onRename={handleRename}
+        onDelete={handleDelete}
+        onTurnIn={handleTurnIn}
+        onGetShareLink={handleGetShareLink}
+        onRevokeShareLink={handleRevokeShareLink}
+      />
+    )
+  }
+
+  const createCards = (
+    <>
+      <CreateHouseCard onClick={() => handleCreate()} disabled={creating} />
+      {canDraft && (
+        <CreateHouseCard onClick={() => handleCreate(true)} disabled={creating} label="Start with an AI draft" />
+      )}
+    </>
+  )
+
+  const gridStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gap: 20,
+  }
+  const sectionHeadingStyle: React.CSSProperties = {
+    fontFamily: 'var(--font-display)',
+    fontWeight: 500,
+    fontSize: 'clamp(18px, 2.2vw, 22px)',
+    letterSpacing: '-0.01em',
+    color: 'var(--ink)',
+  }
+
   return (
     <div className="acct-vh-min" style={{ display: 'flex', flexDirection: 'column', background: 'var(--parchment)' }}>
       <DashboardHeader
         onSignOut={() => void signOut()}
         showClassroom={isTeacher || isStudent || hasMemberships}
         classroomHref={isTeacher ? '/classroom' : '/classes'}
+        // Business mode (decision 021): the nav entry follows the toggle, but
+        // stays visible if the user already has projects so they never lose
+        // the way back to manage/reactivate them after switching modes off.
+        showProjects={workspaceMode === 'business' || hasProjects}
       />
 
       <main id="main" style={{ flex: '1 1 auto' }}>
@@ -431,49 +505,67 @@ export default function DashboardPage() {
             <StudentAssignments />
           </div>
 
-          {/* Grid (single column on very narrow phones via acct-card-grid) */}
-          <div
-            className="acct-card-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: 20,
-              marginTop: 'clamp(24px, 3vw, 36px)',
-            }}
-          >
-            {filteredHouses.length === 0 && houses.length > 0 && (
-              <p className="mono" style={{ fontSize: 12, color: 'var(--ink-subtle)', gridColumn: '1 / -1', padding: '24px 0' }}>
-                No houses match your filters.
-              </p>
-            )}
-            {filteredHouses.map((h) => {
-              const isContinueHouse = h.id === continueHouseId
-              return (
-                <HouseCard
-                  key={h.id}
-                  house={h}
-                  href={`/build/${h.id}`}
-                  graded={gradedIds.has(h.id)}
-                  selectable={selectable && !isContinueHouse}
-                  selected={selectedIds.has(h.id)}
-                  onToggle={toggleSelect}
-                  onRename={handleRename}
-                  onDelete={handleDelete}
-                  onTurnIn={handleTurnIn}
-                  onGetShareLink={handleGetShareLink}
-                  onRevokeShareLink={handleRevokeShareLink}
-                />
-              )
-            })}
-            <CreateHouseCard onClick={() => handleCreate()} disabled={creating} />
-            {canDraft && (
-              <CreateHouseCard
-                onClick={() => handleCreate(true)}
-                disabled={creating}
-                label="Start with an AI draft"
-              />
-            )}
-          </div>
+          {/* Grid (single column on very narrow phones via acct-card-grid) — flat
+              when the user has no projects (unchanged), grouped by project
+              otherwise (business mode, decision 021). */}
+          {!hasProjects ? (
+            <div className="acct-card-grid" style={{ ...gridStyle, marginTop: 'clamp(24px, 3vw, 36px)' }}>
+              {filteredHouses.length === 0 && houses.length > 0 && (
+                <p className="mono" style={{ fontSize: 12, color: 'var(--ink-subtle)', gridColumn: '1 / -1', padding: '24px 0' }}>
+                  No houses match your filters.
+                </p>
+              )}
+              {filteredHouses.map(renderHouseCard)}
+              {createCards}
+            </div>
+          ) : (
+            <div style={{ marginTop: 'clamp(24px, 3vw, 36px)', display: 'flex', flexDirection: 'column', gap: 'clamp(28px, 3.5vw, 40px)' }}>
+              {filteredHouses.length === 0 && houses.length > 0 && (
+                <p className="mono" style={{ fontSize: 12, color: 'var(--ink-subtle)' }}>
+                  No houses match your filters.
+                </p>
+              )}
+              {(projects ?? []).map((p) => {
+                const group = filteredHouses.filter((h) => h.projectId === p.id)
+                if (group.length === 0) return null
+                return (
+                  <div key={p.id}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                      <h2 style={{ ...sectionHeadingStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {p.name}
+                        {p.status === 'archived' && (
+                          <span className="mono" style={{ fontSize: 9, color: 'var(--ink-subtle)', border: '1px solid var(--rule)', borderRadius: 4, padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            Archived
+                          </span>
+                        )}
+                      </h2>
+                      <Link href={`/projects/${p.id}`} className="mono" style={{ fontSize: 11, color: 'var(--ink-subtle)', whiteSpace: 'nowrap' }}>
+                        Manage project →
+                      </Link>
+                    </div>
+                    <div className="acct-card-grid" style={gridStyle}>{group.map(renderHouseCard)}</div>
+                  </div>
+                )
+              })}
+              {(() => {
+                const unassigned = filteredHouses.filter((h) => h.projectId === null)
+                return (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                      <h2 style={sectionHeadingStyle}>Not in a project</h2>
+                      <Link href="/projects" className="mono" style={{ fontSize: 11, color: 'var(--ink-subtle)', whiteSpace: 'nowrap' }}>
+                        Manage projects →
+                      </Link>
+                    </div>
+                    <div className="acct-card-grid" style={gridStyle}>
+                      {unassigned.map(renderHouseCard)}
+                      {createCards}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          )}
 
           {/* Mechanism 1 ("Invite"): houses someone else owns where the
               signed-in user is a house_collaborators row. Deliberately its own

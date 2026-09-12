@@ -9,6 +9,7 @@ import { axisMeasures } from '@/lib/build/content'
 import { draftGateLocked, unclaimedDraftStages } from '@/lib/ai/draft'
 import { ChevronRight } from '../buildIcons'
 import { CritiqueSection } from './CritiqueSection'
+import { SaveFactsToProjectButton } from '../SaveToProjectButton'
 
 const monoLabel = (extra?: React.CSSProperties): React.CSSProperties => ({
   fontFamily: 'var(--font-mono)',
@@ -135,6 +136,15 @@ export function ReviewLayer({
 
       {/* Co-pilot critique — commentary beside the score, never an input to it. */}
       <CritiqueSection state={state} dispatch={dispatch} />
+
+      {/* Business mode (decision 021, Phase 3): a one-click way to carry this
+          house's interview facts up into the owning project's accumulating
+          context — self-hides when there's no project, or no facts yet. */}
+      {state.projectId && (
+        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+          <SaveFactsToProjectButton projectId={state.projectId} facts={state.aiContext?.facts ?? []} />
+        </div>
+      )}
 
       {/* Closing panel — honest about what exists today. Sharing and PDF
           export ship later; a success toast for a no-op is worse than nothing. */}

@@ -10,6 +10,7 @@ import { capabilitiesFor } from '@/lib/auth/capabilities'
 import { CenterNotice, useSignOut } from '@/components/useAuthedPage'
 import type { AccountType } from '@/lib/profile/data'
 import type { State } from '@/lib/build/types'
+import { getProject } from '@/lib/projects/data'
 
 export default function BuildHouseRoute({
   params,
@@ -63,7 +64,7 @@ export default function BuildHouseRoute({
 
       const [{ data: profile }, { data: houseRow }, { data: collabRow }, loadedHouse] = await Promise.all([
         supabase.from('profiles').select('account_type, has_seen_builder_tour').eq('id', user.id).single(),
-        supabase.from('houses').select('owner_id, is_strawman, assignment_id, turned_in').eq('id', id).single(),
+        supabase.from('houses').select('owner_id, is_strawman, assignment_id, turned_in, project_id').eq('id', id).single(),
         // Mechanism 1: this caller's own membership row, if any (house_collaborators
         // RLS lets a user always read their own row, even before can_access_house
         // resolves — see migration 0004).
@@ -77,6 +78,24 @@ export default function BuildHouseRoute({
       }
       const { state, rev } = loadedHouse
       revRef.current = rev
+
+      // Business mode (decision 021, Phase 3): the owning project's
+      // accumulated context, if any — folded into state.projectId/
+      // projectContext (never persisted back onto the house row; see
+      // lib/build/types.ts's State comment). A lookup failure (project
+      // archived/deleted, RLS denies it) just leaves this house with no
+      // project context, same as having none.
+      const projectId = houseRow?.project_id ?? null
+      state.projectId = projectId
+      if (projectId) {
+        try {
+          const project = await getProject(supabase, projectId)
+          if (!active) return
+          state.projectContext = project?.context ?? null
+        } catch {
+          state.projectContext = null
+        }
+      }
       const caps = capabilitiesFor((profile?.account_type as AccountType) ?? 'standard')
       const isStrawman = houseRow?.is_strawman === true
       const notOwner = houseRow?.owner_id != null && houseRow.owner_id !== user.id

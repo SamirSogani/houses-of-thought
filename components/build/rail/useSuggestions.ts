@@ -88,7 +88,15 @@ export function useSuggestions({
       const res = await fetch('/api/ai/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ house: JSON.parse(content), step: targetStep, mode: state.mode }),
+        body: JSON.stringify({
+          house: JSON.parse(content),
+          step: targetStep,
+          mode: state.mode,
+          // Business mode (decision 021, Phase 3): folded into the same
+          // per-house AI context the interviewer already establishes
+          // (lib/ai/serialize.ts) — never persisted onto the house itself.
+          projectContext: state.projectContext,
+        }),
         signal: controller.signal,
       })
       if (!res.ok) {

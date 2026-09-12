@@ -33,7 +33,7 @@ import {
 } from './contracts'
 import {
   REASONING_PERSONA,
-  PERSPECTIVE_STANCE_BLOCK,
+  perspectiveStanceBlock,
   PERSPECTIVE_SUBQUESTIONS_BLOCK,
   PERSPECTIVE_ASSUMPTIONS_BLOCK,
   PERSPECTIVE_EVIDENCE_STRATEGY_BLOCK,
@@ -47,6 +47,7 @@ import {
 import { runReviewPanel } from './orchestrator-panel'
 import { runSearches } from './search'
 import { MAX_REGENERATION_ATTEMPTS, REPAIR_TOKEN_HEADROOM } from './budget'
+import type { WorkspaceMode } from '@/lib/profile/data'
 
 if (typeof window !== 'undefined') {
   throw new Error('lib/ai/reasoning/orchestrator-perspectives.ts is server-only and must not run in the browser')
@@ -67,7 +68,10 @@ export async function runPerspectivesGenerateStances(
   dryRun: boolean,
   // Phase 3 item 1's re-contextualization mechanism (context-gather-post +
   // any ad-hoc calls so far) — route.ts's buildExtraContext.
-  extraContext?: string | null
+  extraContext?: string | null,
+  // Business mode (decision 021): defaults to 'general' so the admin-only
+  // pipeline (not to be touched — plan doc 27) keeps calling this unchanged.
+  workspaceMode: WorkspaceMode = 'general'
 ): Promise<PerspectiveStance[]> {
   const frameText = serializeFrame(frame, extraContext)
   return Promise.all(
@@ -83,7 +87,7 @@ export async function runPerspectivesGenerateStances(
       }
       const modelOut = await completeJSON({
         role: 'swarm',
-        system: `${REASONING_PERSONA}\n\n${PERSPECTIVE_STANCE_BLOCK}`,
+        system: `${REASONING_PERSONA}\n\n${perspectiveStanceBlock(workspaceMode)}`,
         user: `${frameText}\n\nYour assigned viewpoint label: ${label}`,
         schema: StanceModelSchema,
         schemaName: 'perspective_stance',

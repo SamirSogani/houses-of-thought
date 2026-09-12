@@ -58,6 +58,12 @@ export function InterviewCard({
   const [input, setInput] = useState('')
   const [inFlight, setInFlight] = useState(false)
   const [errorCode, setErrorCode] = useState<string | null>(null)
+  // Business mode (decision 021, Phase 5): what the last turn actually
+  // retrieved from the project's own material, so the UI can say so
+  // explicitly — never presented as Research Mode's Brave-sourced evidence
+  // (the plan doc's own UI-distinction requirement). [] most of the time
+  // (general mode, no project, or nothing relevant found).
+  const [ragSources, setRagSources] = useState<{ sourceType: string; label: string }[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const userTurns = transcript.filter((t) => t.role === 'user').length
@@ -73,6 +79,13 @@ export function InterviewCard({
           house: JSON.parse(serializeContent(state)),
           transcript: sendTranscript,
           forceSummary,
+          // Business mode (decision 021, Phase 3): see useSuggestions.ts's own
+          // comment on this same field.
+          projectContext: state.projectContext,
+          // Business mode (decision 021, Phase 5): lets the route retrieve
+          // this project's own document chunks — RLS-safe even though it's
+          // client-supplied (see the route's own comment on this field).
+          projectId: state.projectId,
         }),
       })
       if (!res.ok) {
@@ -84,7 +97,9 @@ export function InterviewCard({
         reply: string
         done: boolean
         context: { summary: string; facts: string[] } | null
+        ragSources?: { sourceType: string; label: string }[]
       }
+      setRagSources(data.ragSources ?? [])
       if (data.done && data.context) {
         dispatch({ type: 'SET_AI_CONTEXT', context: data.context })
         setActive(false)
@@ -110,6 +125,7 @@ export function InterviewCard({
     setActive(true)
     setTranscript([])
     setErrorCode(null)
+    setRagSources([])
     runInterview([], false)
   }
 
@@ -174,6 +190,18 @@ export function InterviewCard({
             <div style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--ink-subtle)', padding: '4px 2px' }}>…</div>
           )}
         </div>
+
+        {/* Business mode (decision 021, Phase 5): explicit, visible distinction
+            from Research Mode's Brave-sourced evidence — this is retrieval
+            over the person's OWN uploaded/accumulated project material. */}
+        {ragSources.length > 0 && (
+          <div
+            className="mono"
+            style={{ fontSize: 10, color: 'var(--amber-text)', marginTop: 8, lineHeight: 1.5 }}
+          >
+            Used your own project material — not verified evidence: {ragSources.map((s) => s.label).join(', ')}
+          </div>
+        )}
 
         {errorCode === RATE_LIMITED_CODE ? (
           <div style={{ fontSize: 12, color: 'var(--ink)', marginTop: 8, lineHeight: 1.45 }}>{RATE_LIMITED_COPY}</div>

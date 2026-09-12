@@ -110,6 +110,8 @@ export const initialState: State = {
   ],
 
   activePerspective: null,
+  projectId: null,
+  projectContext: null,
 }
 
 function nextId(items: { id: number }[]): number {

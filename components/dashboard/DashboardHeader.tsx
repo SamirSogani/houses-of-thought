@@ -43,18 +43,30 @@ function SignOutIcon() {
   )
 }
 
+function FolderIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M2 4.5A1.5 1.5 0 013.5 3h2.6l1.2 1.5H12.5A1.5 1.5 0 0114 6v5.5A1.5 1.5 0 0112.5 13h-9A1.5 1.5 0 012 11.5v-7z" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function DashboardHeader({
   onSignOut,
   active,
   showClassroom = false,
   classroomHref = '/classroom',
+  showProjects = false,
 }: {
   onSignOut: () => void
-  active?: 'framework' | 'collab' | 'classroom' | 'profile' | 'admin'
+  active?: 'framework' | 'collab' | 'classroom' | 'profile' | 'admin' | 'projects'
   // Teachers get a Classroom entry point (capabilities.canCreateClasses); students
   // get their own panel via classroomHref='/classes'.
   showClassroom?: boolean
   classroomHref?: string
+  // Business mode (decision 021): opt-in nav entry for /projects. UI-only —
+  // never a capability gate (lib/auth/capabilities.ts stays untouched by this).
+  showProjects?: boolean
 }) {
   const hover = (c: string) => (e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.color = c)
   const activeStyle: React.CSSProperties = { color: 'var(--ink)', borderBottom: '2px solid var(--amber)', paddingBottom: 3 }
@@ -97,6 +109,17 @@ export function DashboardHeader({
               onMouseLeave={hover(active === 'classroom' ? 'var(--ink)' : 'var(--ink-subtle)')}
             >
               Classroom
+            </Link>
+          )}
+          {showProjects && (
+            <Link
+              href="/projects"
+              style={{ ...monoLink, ...(active === 'projects' ? activeStyle : {}) }}
+              onMouseEnter={hover('var(--ink)')}
+              onMouseLeave={hover(active === 'projects' ? 'var(--ink)' : 'var(--ink-subtle)')}
+            >
+              <FolderIcon />
+              Projects
             </Link>
           )}
           <Link href="/build" style={{ ...monoLink, color: 'var(--ink)', ...(active === 'collab' ? activeStyle : {}) }} onMouseEnter={hover('var(--amber-text)')} onMouseLeave={hover('var(--ink)')}>
