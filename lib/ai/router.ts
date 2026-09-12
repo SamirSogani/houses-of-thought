@@ -44,7 +44,11 @@
 // per-role deadline (ATTEMPT_TIMEOUT_MS / CHAIN_DEADLINE_MS) so one slow-but-
 // alive provider cannot eat that role's route's entire serverless budget
 // (30s for most AI routes; 60s for the reasoning pipeline's swarm/synthesis,
-// see CHAIN_DEADLINE_MS below).
+// see CHAIN_DEADLINE_MS below). Enforced two ways: the OpenAI SDK's own
+// `{ timeout }` option per callProvider() call, and — since real traffic
+// (2026-09-12) showed that alone can fail to tear down a stalled connection
+// — raceTimeout() as a backstop that abandons a hung attempt on schedule
+// regardless of whether the underlying request ever actually gets killed.
 
 import type OpenAI from 'openai'
 import { z } from 'zod'
@@ -378,6 +382,43 @@ async function execute(role: AiRole, opts: ExecuteOpts): Promise<{ content: stri
 const JSON_SHAPE_GUARDRAIL =
   'Respond with exactly one JSON object matching the schema — do not wrap it in an array or add any extra nesting.'
 
+// Defense in depth alongside the SDK's own `{ timeout }` option (passed into
+// client.chat.completions.create below), which is an AbortController +
+// setTimeout implementation that looks correct on paper but real traffic
+// (2026-09-12, Mistral, role 'coach', ATTEMPT_TIMEOUT_MS.coach=8000) showed a
+// stalled upstream connection can survive it: that call ran 7.9 MINUTES
+// before the SDK finally surfaced "Request timed out." — the abort signal
+// evidently never tore down whatever was holding the socket open (a known
+// class of fetch/undici issue with a response that has started streaming
+// but stalls). This does not try to kill the connection any harder than the
+// SDK's own signal already does; it just refuses to let the CALLER (and
+// therefore the whole failover cascade in execute()) keep waiting on it —
+// whichever settles first wins, and a request that loses the race is left to
+// resolve/reject in the background, unawaited, rather than blocking the next
+// attempt in the chain. HARD_TIMEOUT_GRACE_MS gives the SDK's own timeout
+// (which produces a properly-classified error — see errorText/statusOf) a
+// head start to fire first in the normal case; this is a backstop for when
+// it doesn't, not a replacement for it.
+const HARD_TIMEOUT_GRACE_MS = 3_000
+
+function raceTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`client-side hard timeout after ${timeoutMs}ms (${label}) — upstream did not honor its own abort signal in time`))
+    }, timeoutMs + HARD_TIMEOUT_GRACE_MS)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      }
+    )
+  })
+}
+
 async function callProvider(
   client: OpenAI,
   attempt: Attempt,
@@ -398,21 +439,26 @@ async function callProvider(
 
   let completion: OpenAI.Chat.Completions.ChatCompletion
   try {
-    completion = (await client.chat.completions.create(
-      {
-        model: attempt.model,
-        max_tokens: opts.maxTokens,
-        response_format,
-        // reasoning_effort is only accepted by some models; omit it elsewhere.
-        ...(reasoning_effort ? { reasoning_effort } : {}),
-        messages: [
-          { role: 'system', content: systemContent },
-          { role: 'user', content: opts.user },
-        ],
-      } as Parameters<typeof client.chat.completions.create>[0],
-      // Per-attempt budget (overrides the client-level 25s backstop) so a slow
-      // target times out into the cascade instead of eating the whole chain.
-      { timeout: timeoutMs }
+    completion = (await raceTimeout(
+      client.chat.completions.create(
+        {
+          model: attempt.model,
+          max_tokens: opts.maxTokens,
+          response_format,
+          // reasoning_effort is only accepted by some models; omit it elsewhere.
+          ...(reasoning_effort ? { reasoning_effort } : {}),
+          messages: [
+            { role: 'system', content: systemContent },
+            { role: 'user', content: opts.user },
+          ],
+        } as Parameters<typeof client.chat.completions.create>[0],
+        // Per-attempt budget (overrides the client-level 25s backstop) so a slow
+        // target times out into the cascade instead of eating the whole chain.
+        // raceTimeout() above is the backstop for when this doesn't fire.
+        { timeout: timeoutMs }
+      ),
+      timeoutMs,
+      `${attempt.provider}/${attempt.model}`
     )) as OpenAI.Chat.Completions.ChatCompletion
   } catch (err) {
     // Full request-context diagnostic on ANY upstream failure (2026-07-31):
@@ -480,14 +526,35 @@ function stripMarkdownFence(raw: string): string {
 // Narrows a zod issue to the exact shape a plain `z.string().max(N)`
 // violation produces. Deliberately strict (checks code, origin, AND that
 // maximum is a plain number) — anything else (a missing required field, a
-// wrong type, an array-length overflow) must NOT be treated as
-// mechanically truncatable, so it falls through to the real
-// ai-invalid-output error instead of being silently mishandled.
+// wrong type) must NOT be treated as mechanically repairable, so it falls
+// through to the real ai-invalid-output error instead of being silently
+// mishandled.
 function isStringTooBig(
   issue: unknown
 ): issue is { code: 'too_big'; origin: 'string'; maximum: number; path: PropertyKey[] } {
   const i = issue as { code?: unknown; origin?: unknown; maximum?: unknown; path?: unknown }
   return i.code === 'too_big' && i.origin === 'string' && typeof i.maximum === 'number' && Array.isArray(i.path)
+}
+
+// Same idea, for a plain `z.array(x).max(N)` violation (2026-09-12,
+// real-verified: global_evidence_strategy's questions_for_user[].options
+// cap — contracts.ts's own `.max(3)`, mirroring this app's quick-pick UI —
+// got a genuinely reasonable 4-option answer from the model, which failed
+// validation and burned both of completeJSON's attempts for a shape this
+// codebase can safely fix in code). Dropping the excess TAIL items (not
+// picking "the best" N) is deliberate: it's a lossless, deterministic rule
+// with no judgment call embedded in it, same posture as
+// truncateAtWordBoundary below — inventing which items to keep would be
+// exactly the kind of silent fabrication this repair pass exists to avoid.
+function isArrayTooBig(
+  issue: unknown
+): issue is { code: 'too_big'; origin: 'array'; maximum: number; path: PropertyKey[] } {
+  const i = issue as { code?: unknown; origin?: unknown; maximum?: unknown; path?: unknown }
+  return i.code === 'too_big' && i.origin === 'array' && typeof i.maximum === 'number' && Array.isArray(i.path)
+}
+
+function isRepairableIssue(issue: unknown): issue is { code: 'too_big'; origin: 'string' | 'array'; maximum: number; path: PropertyKey[] } {
+  return isStringTooBig(issue) || isArrayTooBig(issue)
 }
 
 // Cuts at the last space at or before maxLength, so a truncated field reads
@@ -523,35 +590,48 @@ function setAtPath(obj: Record<PropertyKey, unknown>, path: readonly PropertyKey
 }
 
 // completeJSON's third pass: only reachable after the first attempt AND the
-// schema-error retry have both already failed. Truncates every offending
-// field to its own schema cap (from the issue itself, not re-derived) and
-// re-validates. Returns { ok: false } — never throws — for anything outside
-// its narrow scope (issues aren't ALL plain string-length overflows, the
-// truncated object still doesn't validate, etc.) so the caller's existing
-// ai-invalid-output path is the only way those cases can fail.
-function repairTruncatedFields<T>(
+// schema-error retry have both already failed. Repairs every offending
+// field to its own schema cap (from the issue itself, not re-derived) —
+// shortening an oversized string, or dropping an oversized array's excess
+// tail items — and re-validates. Returns { ok: false } — never throws — for
+// anything outside its narrow scope (issues aren't ALL string/array
+// too-big, the repaired object still doesn't validate, etc.) so the
+// caller's existing ai-invalid-output path is the only way those cases can
+// fail. Deliberately narrow: a missing field or wrong type has no safe,
+// judgment-free fix, and must keep surfacing as a real error.
+function repairOversizedFields<T>(
   parsed: unknown,
   issues: readonly unknown[],
   schema: z.ZodType<T>
-): { ok: true; value: T; truncated: { path: string; from: number; to: number }[] } | { ok: false } {
-  if (issues.length === 0 || !issues.every(isStringTooBig) || parsed === null || typeof parsed !== 'object') {
+): { ok: true; value: T; repaired: { path: string; kind: 'string' | 'array'; from: number; to: number }[] } | { ok: false } {
+  if (issues.length === 0 || !issues.every(isRepairableIssue) || parsed === null || typeof parsed !== 'object') {
     return { ok: false }
   }
   // Deep clone so a repair attempt that ultimately fails never mutates
   // anything the caller (or the diagnostic log right after it) still reads.
-  const repaired = JSON.parse(JSON.stringify(parsed)) as Record<PropertyKey, unknown>
-  const truncated: { path: string; from: number; to: number }[] = []
+  const working = JSON.parse(JSON.stringify(parsed)) as Record<PropertyKey, unknown>
+  const repaired: { path: string; kind: 'string' | 'array'; from: number; to: number }[] = []
   for (const issue of issues) {
-    if (!isStringTooBig(issue)) return { ok: false } // defensive; .every above already guarantees this
-    const value = getAtPath(repaired, issue.path)
-    if (typeof value !== 'string') return { ok: false }
-    const shortened = truncateAtWordBoundary(value, issue.maximum)
-    if (!setAtPath(repaired, issue.path, shortened)) return { ok: false }
-    truncated.push({ path: issue.path.join('.') || '(root)', from: value.length, to: shortened.length })
+    if (!isRepairableIssue(issue)) return { ok: false } // defensive; .every above already guarantees this
+    const value = getAtPath(working, issue.path)
+    const pathLabel = issue.path.join('.') || '(root)'
+    if (isStringTooBig(issue)) {
+      if (typeof value !== 'string') return { ok: false }
+      const shortened = truncateAtWordBoundary(value, issue.maximum)
+      if (!setAtPath(working, issue.path, shortened)) return { ok: false }
+      repaired.push({ path: pathLabel, kind: 'string', from: value.length, to: shortened.length })
+    } else {
+      // isArrayTooBig — drop the excess tail items (see that function's own
+      // comment for why tail, not "the best" N).
+      if (!Array.isArray(value)) return { ok: false }
+      const shortened = value.slice(0, issue.maximum)
+      if (!setAtPath(working, issue.path, shortened)) return { ok: false }
+      repaired.push({ path: pathLabel, kind: 'array', from: value.length, to: shortened.length })
+    }
   }
-  const result = schema.safeParse(repaired)
+  const result = schema.safeParse(working)
   if (!result.success) return { ok: false }
-  return { ok: true, value: result.data, truncated }
+  return { ok: true, value: result.data, repaired }
 }
 
 // ── Public facade ─────────────────────────────────────────────────────────────
@@ -651,29 +731,32 @@ export async function completeJSON<T>(opts: {
   const second = tryParse(secondResult.content)
   if (second.ok) return second.value
 
-  // Third, code-only pass (2026-09-09, Samir's spec, real-verified live the
-  // same session it was added): fires ONLY when every issue on the retry's
-  // own output is a plain string-length overflow (isStringTooBig below) — a
-  // missing field, wrong type, or anything else still falls straight through
-  // to the ai-invalid-output throw. Motivation: DeepSeek-V4-Flash-0731
-  // real-verified repeatedly overflowing core_question/scope_notes/
-  // cross_perspective_notes/question_level_assumptions[i]'s length caps on
-  // BOTH the first attempt and the schema-error retry — sometimes padding an
-  // otherwise-good field with its own commentary about the length limit
-  // itself rather than actually shortening it. Truncating the offending
-  // field(s) to their own schema cap (issue.maximum — zod already computed
-  // this for us; no need to re-derive it from the jsonSchema above) and
-  // re-validating recovers a genuinely-good answer instead of throwing it
-  // away and forcing a manual retry through the whole UI.
-  const repaired = repairTruncatedFields(second.parsed, second.issues, opts.schema)
-  if (repaired.ok) {
-    log.warn('ai/router', 'completeJSON auto-truncated to fit schema', {
+  // Third, code-only pass: fires ONLY when every issue on the retry's own
+  // output is a plain string- or array-length overflow (isRepairableIssue
+  // below) — a missing field, wrong type, or anything else still falls
+  // straight through to the ai-invalid-output throw. Started 2026-09-09
+  // (Samir's spec, real-verified live the same session): DeepSeek-V4-
+  // Flash-0731 repeatedly overflowing core_question/scope_notes/
+  // cross_perspective_notes/question_level_assumptions[i]'s STRING length
+  // caps on both attempts — sometimes padding an otherwise-good field with
+  // its own commentary about the limit itself rather than shortening it.
+  // Widened to ARRAY caps 2026-09-12 (real-verified the same session): the
+  // same model overflowing global_evidence_strategy's
+  // questions_for_user[].options (contracts.ts's `.max(3)`) with a
+  // genuinely reasonable 4th option. Repairing the offending field(s) to
+  // their own schema cap (issue.maximum — zod already computed this for us;
+  // no need to re-derive it from the jsonSchema above) and re-validating
+  // recovers a genuinely-good answer instead of throwing it away and
+  // forcing a manual retry through the whole UI.
+  const repair = repairOversizedFields(second.parsed, second.issues, opts.schema)
+  if (repair.ok) {
+    log.warn('ai/router', 'completeJSON auto-repaired to fit schema', {
       schemaName: opts.schemaName,
       role: opts.role,
       target: targetName(secondResult.target),
-      truncated: repaired.truncated,
+      repaired: repair.repaired,
     })
-    return repaired.value
+    return repair.value
   }
 
   // Diagnostic only (2026-07-30): visibility into what the model actually

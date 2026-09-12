@@ -29,35 +29,64 @@
 //     4. Google    gemini-2.5-flash       (while Groq cools / on Groq 429)
 //
 //   REAL-TIME BACKGROUND  (coach | critic)
-//   Latency-sensitive background events fired by user activity. Kept off the big
-//   models to preserve the shared Mistral 50k TPM budget.
-//     1. Mistral   ministral-8b-latest    (primary)
-//     2. DeepInfra gpt-oss-20b            (on Mistral 429)  ── paid relief valve, added
-//                                          2026-08-10 (Samir): the reasoning pipeline's
-//                                          9-parallel review panel (all `critic`) plus
-//                                          real-time `coach` traffic were exhausting
-//                                          Mistral's free tier and spilling onto Groq
-//                                          fast enough that even n=2 test runs failed
-//                                          roughly half the time — and Groq's paid
-//                                          Developer tier wasn't available to upgrade
-//                                          to at the time. TARGETS.deepinfra
+//   Latency-sensitive background events fired by user activity.
+//     1. DeepInfra gpt-oss-20b            (primary — promoted ahead of Mistral
+//                                          2026-09-12, Samir's explicit call: a
+//                                          live 'coach' call sat on a stalled
+//                                          Mistral connection for 7.9 minutes
+//                                          before erroring — see raceTimeout()
+//                                          in router.ts for the timeout-
+//                                          enforcement bug that let it run
+//                                          that long in the first place.
+//                                          DeepInfra is paid — no free-tier
+//                                          budget to preserve the way
+//                                          Mistral's old primary slot here
+//                                          did — so this trades free-tier
+//                                          headroom for the provider that's
+//                                          actually been reliable, same
+//                                          reasoning already applied to the
+//                                          suggestor lane on 2026-08-18. Added
+//                                          to this lane in the first place on
+//                                          2026-08-10 (Samir), as a paid relief
+//                                          valve: the reasoning pipeline's
+//                                          9-parallel review panel (all
+//                                          `critic`) plus real-time `coach`
+//                                          traffic were exhausting Mistral's
+//                                          free tier and spilling onto Groq
+//                                          fast enough that even n=2 test runs
+//                                          failed roughly half the time — and
+//                                          Groq's paid Developer tier wasn't
+//                                          available to upgrade to at the
+//                                          time. TARGETS.deepinfra
 //                                          (router-config.ts) is deliberately
-//                                          model-agnostic in its naming — a same-day
-//                                          detour through gpt-oss-20b and back needed a
-//                                          4-file rename each way, which is why the model
-//                                          itself is a one-line change (TARGETS.deepinfra's
-//                                          `model` default, or DEEPINFRA_MODEL env, no code
-//                                          change at all). Swapped to gpt-oss-20b again the
-//                                          same day (Samir): real review-panel runs showed
-//                                          Llama wasn't reliably incorporating the panel's
-//                                          regeneration feedback. Same model id this
-//                                          codebase already runs successfully on Groq (see
-//                                          draftAttempts() below) and Cerebras, and it gets
-//                                          the strict json_schema path (supportsJsonSchema(),
-//                                          router-shared.ts) instead of the looser
-//                                          json_object path Llama got — not cheaper, this
-//                                          swap is for reliability.
-//     3. Groq      qwen3.6-27b            (on DeepInfra failure)  ── stateful, see below
+//                                          model-agnostic in its naming — a
+//                                          same-day detour through gpt-oss-20b
+//                                          and back needed a 4-file rename
+//                                          each way, which is why the model
+//                                          itself is a one-line change
+//                                          (TARGETS.deepinfra's `model`
+//                                          default, or DEEPINFRA_MODEL env, no
+//                                          code change at all). Swapped to
+//                                          gpt-oss-20b again the same day
+//                                          (Samir): real review-panel runs
+//                                          showed Llama wasn't reliably
+//                                          incorporating the panel's
+//                                          regeneration feedback. Same model
+//                                          id this codebase already runs
+//                                          successfully on Groq (see
+//                                          draftAttempts() below) and
+//                                          Cerebras, and it gets the strict
+//                                          json_schema path
+//                                          (supportsJsonSchema(),
+//                                          router-shared.ts) instead of the
+//                                          looser json_object path Llama got —
+//                                          not cheaper, this swap is for
+//                                          reliability.
+//     2. Mistral   ministral-8b-latest    (on DeepInfra 429/failure — this
+//                                          lane's original primary since
+//                                          decision 013, 2026-07-11; demoted,
+//                                          not removed, 2026-09-12 above)
+//     3. Groq      qwen3.6-27b            (on Mistral failure)  ── stateful, see below
 //     4. Google    gemini-2.5-flash       (while Groq cools / on Groq 429)
 //     5. Cerebras  gpt-oss-120b           (multi-throttle bridge, on Google 429)
 //
@@ -241,11 +270,11 @@ const DEEPINFRA_SWARM_TIMEOUT_MS = 200_000
 // no documented reason.
 const DEEPINFRA_SWARM_LARGE_TIMEOUT_MS = 240_000
 
-// Real-time background lane (coach | critic): Mistral primary, then the paid
-// DeepInfra relief valve (see header comment above), then the Groq
-// penalty-aware bridge to Google / Cerebras.
+// Real-time background lane (coach | critic): DeepInfra primary (promoted
+// ahead of Mistral 2026-09-12 — see header comment above for why), Mistral
+// as fallback, then the Groq penalty-aware bridge to Google / Cerebras.
 function realtimeAttempts(): Attempt[] {
-  const attempts: Attempt[] = [{ ...TARGETS.mistral8b }, { ...TARGETS.deepinfra }]
+  const attempts: Attempt[] = [{ ...TARGETS.deepinfra }, { ...TARGETS.mistral8b }]
   if (groqCoolingDown()) {
     // Shock absorber: Groq penalty is open — skip it entirely.
     attempts.push({ ...TARGETS.geminiFlash })
