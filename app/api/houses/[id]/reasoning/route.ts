@@ -269,67 +269,66 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // through final-composition all take extraContext), so this needs no new
   // plumbing through dispatch.ts's StepDispatchContext.
   //
-  // Computed ONCE per run, not once per step. This route gets one POST per
-  // pipeline step (~20 for a thorough run) and the client resends the whole
-  // `run` object each time, so `run.businessContext` already being set means
-  // a prior step computed it — reuse it outright instead of repeating a
-  // project lookup and (when gated on) an embedding-API round trip on every
-  // single step. Latency and cost both mattered here: this was previously
-  // recomputed unconditionally on every step. The cache is carried forward
-  // to the client via ok()/retryStep()/halted() below, which merge it into
-  // whichever patch they return exactly once — from then on the client's own
-  // resent `run` already has it, same mechanism as `frame`/`breadthScoping`/
-  // every other field a specific step computes once and everything after
-  // just reads.
-  // .nullish() admits both null and undefined (zod, route-schema.ts) — this
-  // route only ever writes a concrete object once computed, so either means
-  // "not computed yet" here.
-  let businessContext = run.businessContext
-  // True only on the one request that actually computed it — ok()/
-  // retryStep()/halted() below check this to know whether to fold it into
-  // the outgoing patch (once) or leave it out (the client already has it).
-  const businessContextFresh = businessContext == null
-  if (businessContext == null) {
-    let projectContextText: string | null = null
-    const { data: houseProjectRow } = await supabase.from('houses').select('project_id').eq('id', houseId).maybeSingle()
-    const projectId = houseProjectRow?.project_id ?? null
-    if (projectId) {
-      try {
-        const project = await getProject(supabase, projectId)
-        const lines = formatProjectContextLines(project?.context)
-        if (lines.length > 0) projectContextText = `## CONTEXT (from project)\n${lines.join('\n')}`
-      } catch {
-        // Best-effort — a lookup failure (archived project, RLS denies it)
-        // just means no project context this run, same as a house with none.
-        projectContextText = null
-      }
-    }
+  // The project id itself is read fresh every step (one cheap row lookup) —
+  // both pieces below need it, and it's not what was ever costing latency.
+  const { data: houseProjectRow } = await supabase.from('houses').select('project_id').eq('id', houseId).maybeSingle()
+  const projectId = houseProjectRow?.project_id ?? null
 
-    // RAG retrieval: its own distinctly-labeled section
-    // (formatRagChunksForPrompt), never merged into projectContextText.
+  // Project context: recomputed fresh every step, deliberately NOT cached.
+  // One cheap DB read, and staying live means an edit to /projects/[id]
+  // mid-run shows up in the very next step instead of being frozen at
+  // whatever it was when the run started.
+  let projectContextText: string | null = null
+  if (projectId) {
+    try {
+      const project = await getProject(supabase, projectId)
+      const lines = formatProjectContextLines(project?.context)
+      if (lines.length > 0) projectContextText = `## CONTEXT (from project)\n${lines.join('\n')}`
+    } catch {
+      // Best-effort — a lookup failure (archived project, RLS denies it)
+      // just means no project context this run, same as a house with none.
+      projectContextText = null
+    }
+  }
+
+  // RAG retrieval: genuinely cached, once per run — unlike project context
+  // above, this IS the latency/cost driver (an embedding-API round trip +
+  // vector search), and the query it searches with (run.originalQuery)
+  // never changes within a run. This route gets one POST per pipeline step
+  // (~20 for a thorough run) and the client resends the whole `run` object
+  // each time, so `run.ragText` already being set (even as null — see
+  // route-schema.ts's own comment on why null and undefined mean different
+  // things here) means a prior step already computed it. The cache is
+  // carried to the client via ok()/retryStep()/halted() below, which merge
+  // it into whichever patch they return exactly once — from then on the
+  // client's own resent `run` already has it. Tradeoff, confirmed with
+  // Samir: a document uploaded mid-run won't be searched until the NEXT
+  // run — accepted, since re-checking every step would reintroduce the
+  // exact cost this exists to avoid.
+  let ragText = run.ragText
+  const ragTextFresh = ragText === undefined
+  if (ragText === undefined) {
+    ragText = null
     // Gated on business mode ONLY: a general-mode caller incurs ZERO
     // embedding-generation cost here, full stop, regardless of whether the
     // house has a project (the plan doc's own explicit manual-verification
     // bullet) — checked before the projectId branch even runs a query
     // embedding.
-    let ragText: string | null = null
     if (workspaceMode === 'business' && projectId && run.originalQuery.trim()) {
       try {
         const chunks = await retrieveProjectChunks(supabase, projectId, run.originalQuery, 5)
+        // Its own distinctly-labeled section (formatRagChunksForPrompt),
+        // never merged into projectContextText.
         const formatted = formatRagChunksForPrompt(chunks)
         if (formatted) ragText = formatted
       } catch (err) {
         log.error('houses/reasoning', 'RAG retrieval failed', { error: (err as Error)?.message })
       }
     }
-
-    businessContext = { projectContextText, ragText }
   }
 
   const extraContext =
-    [buildExtraContext(run), businessContext.projectContextText, businessContext.ragText]
-      .filter((s): s is string => !!s)
-      .join('\n\n') || null
+    [buildExtraContext(run), projectContextText, ragText].filter((s): s is string => !!s).join('\n\n') || null
 
   // Same persistence pattern as the admin route (see its own header comment
   // for the after()/Vercel-timing rationale) — the only difference is the
@@ -353,18 +352,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     )
   }
 
-  // Folds the freshly-computed businessContext into a patch exactly once —
-  // on whichever step's response happens to go out first. Every function
-  // below that can carry a run forward (ok/retryStep/halted) routes its
-  // patch through this, so the client's own resent `run` picks it up
-  // regardless of which step got there first, and every step after that
-  // finds run.businessContext already set and skips recomputing it.
-  function withBusinessContext(patch: Record<string, unknown>): Record<string, unknown> {
-    return businessContextFresh ? { ...patch, businessContext } : patch
+  // Folds the freshly-computed ragText into a patch exactly once — on
+  // whichever step's response happens to go out first. Every function below
+  // that can carry a run forward (ok/retryStep/halted) routes its patch
+  // through this, so the client's own resent `run` picks it up regardless of
+  // which step got there first, and every step after that finds
+  // run.ragText already set and skips recomputing it. Project context is
+  // NOT part of this — it's read fresh every step above, never cached.
+  function withRagCache(patch: Record<string, unknown>): Record<string, unknown> {
+    return ragTextFresh ? { ...patch, ragText } : patch
   }
 
   function ok(step: StepId, patch: Record<string, unknown>): Response {
-    const finalPatch = withBusinessContext(patch)
+    const finalPatch = withRagCache(patch)
     const nextStep = nextStepForMode(step, mode)
     persist(step, finalPatch, nextStep, false)
     return NextResponse.json({ step, patch: finalPatch, nextStep, halted: false })
@@ -387,7 +387,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         { status: 400 }
       )
     }
-    const finalPatch = withBusinessContext(patch)
+    const finalPatch = withRagCache(patch)
     persist(step, finalPatch, generateStep, false)
     return NextResponse.json({ step, patch: finalPatch, nextStep: generateStep, halted: false, retry: true })
   }
@@ -398,7 +398,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     const failing = failingStandardIds(verdict)
     const haltReason = `${step} failed review after ${attempt} attempt${attempt === 1 ? '' : 's'}${run.masterReview?.forStep === step ? ' (including one master-reviewer-guided attempt)' : ''} — ${failing.length}/9 standards still failing (${failing.join(', ')}).`
-    const finalPatch = withBusinessContext(patch)
+    const finalPatch = withRagCache(patch)
     persist(step, finalPatch, null, true, haltReason)
     return NextResponse.json({ step, patch: finalPatch, nextStep: null, halted: true, haltReason })
   }
