@@ -167,27 +167,31 @@ export const RunStateSchema = z.object({
   // masterReview.forStep only ever matches one step. Untouched by every
   // existing caller (admin page, inline pipeline) — always null for them.
   consoleGuidance: z.string().nullish(),
-  // Business mode (decision 021, Phase 3/5, plans/active/business-mode/
-  // 03-accumulating-context.md / 05-rag-retrieval.md): the owning project's
-  // context text and RAG-retrieved chunks, computed ONCE by the house-scoped
-  // route (app/api/houses/[id]/reasoning/route.ts) on whichever step first
-  // needs extraContext, then carried forward via this field on every
-  // subsequent step instead of being recomputed (a real fix — recomputing on
-  // every one of ~20 step POSTs meant a project lookup, and gated on
-  // workspace_mode='business' an embedding-API round trip, added latency to
-  // literally every step). Untouched by every existing caller (admin page,
-  // inline pipeline) — always undefined for them, same convention as
-  // consoleGuidance above. Both inner fields nullable rather than the whole
-  // object being absent once computed, so "computed, found nothing" (no
-  // project, general mode, no matching chunks) is distinguishable from "not
-  // computed yet" (the object itself missing) — that distinction is exactly
-  // what makes the cache-or-compute check work.
-  businessContext: z
-    .object({
-      projectContextText: z.string().nullable(),
-      ragText: z.string().nullable(),
-    })
-    .nullish(),
+  // Business mode (decision 021, Phase 5, plans/active/business-mode/
+  // 05-rag-retrieval.md): RAG-retrieved chunks, computed ONCE by the
+  // house-scoped route (app/api/houses/[id]/reasoning/route.ts) on whichever
+  // step first needs extraContext, then carried forward via this field on
+  // every subsequent step instead of being recomputed — this is the actual
+  // latency/cost driver (an embedding-API round trip + vector search) that
+  // was previously repeated on every one of ~20 step POSTs despite
+  // run.originalQuery (what it searches for) never changing within a run.
+  // The tradeoff, confirmed with Samir: a document uploaded mid-run won't be
+  // searched until the NEXT run — accepted, since re-checking every step
+  // would reintroduce the exact cost this field exists to avoid.
+  //
+  // Deliberately NOT caching the owning project's context text (Phase 3)
+  // alongside this — that's one cheap DB row read, not the latency source,
+  // and staying live means an edit to /projects/[id] mid-run is reflected
+  // in the very next step rather than frozen at run-start (see route.ts,
+  // where it's recomputed fresh every step).
+  //
+  // Untouched by every existing caller (admin page, inline pipeline) —
+  // always undefined for them, same convention as consoleGuidance above.
+  // Nullable (not just optional) so "computed, found nothing" (general
+  // mode, no project, no matching chunks) is distinguishable from "not
+  // computed yet" (undefined) — that distinction is what makes the
+  // cache-or-compute check in route.ts work.
+  ragText: z.string().nullish(),
 })
 export type RunState = z.infer<typeof RunStateSchema>
 
