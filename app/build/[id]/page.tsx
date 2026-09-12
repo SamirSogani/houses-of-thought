@@ -17,10 +17,10 @@ export default function BuildHouseRoute({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ draft?: string }>
+  searchParams: Promise<{ draft?: string; pipeline?: string }>
 }) {
   const { id } = use(params)
-  const { draft: draftParam } = use(searchParams)
+  const { draft: draftParam, pipeline: pipelineParam } = use(searchParams)
   const router = useRouter()
   const [loaded, setLoaded] = useState<State | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -166,6 +166,7 @@ export default function BuildHouseRoute({
       feedback={feedback}
       draftEligible={draftEligible}
       draftEntry={draftParam === '1'}
+      pipelineEntry={pipelineParam === '1'}
       viewerCollaborator={viewerCollaborator}
       team={team}
       hasSeenTour={hasSeenTour}

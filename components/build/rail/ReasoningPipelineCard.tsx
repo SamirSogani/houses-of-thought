@@ -65,6 +65,24 @@ const primaryBtn: React.CSSProperties = {
   cursor: 'pointer',
 }
 
+// Business mode (decision 021, Phase 5) — the pipeline's own analogue of
+// InterviewCard's ragSources note. Before this, retrieved project material
+// reached the model (route.ts's ragText, folded into the prompt) but never
+// reached the person running the pipeline — a real gap against decision
+// 021 §5's "labeled, not laundered" requirement, which is about what the
+// USER sees, not only what the model is told. Shared by the rail card below
+// and the full-page pipeline view (components/build/PipelineFullView.tsx)
+// so the two never drift on this wording.
+export function RagProvenanceNote({ sources }: { sources: { sourceType: string; label: string }[] | null | undefined }) {
+  if (!sources || sources.length === 0) return null
+  const labels = [...new Set(sources.map((s) => s.label))]
+  return (
+    <div className="mono" style={{ fontSize: 10, color: 'var(--amber-text)', marginTop: 10, lineHeight: 1.5 }}>
+      Used your own project material — not verified evidence: {labels.join(', ')}
+    </div>
+  )
+}
+
 export function ReasoningPipelineCard({
   state,
   dispatch,
@@ -151,6 +169,8 @@ export function ReasoningPipelineCard({
       <div style={{ marginTop: 10 }}>
         <ReasoningStagesList run={runner.run} currentStep={runner.step} running={runner.phase === 'running'} />
       </div>
+
+      <RagProvenanceNote sources={runner.run.ragSources} />
 
       {runner.phase === 'awaiting-input' && runner.pendingGather && (
         <ContextGatherAnswerBox

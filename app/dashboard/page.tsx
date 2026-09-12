@@ -163,9 +163,13 @@ export default function DashboardPage() {
     loadProjects()
   }, [loadHouses, loadSharedHouses, loadProjects])
 
-  // draft=true routes into Draft Mode (decision 016): same blank house, but the
-  // workspace opens with the AI-draft flow (?draft=1).
-  async function handleCreate(draft = false) {
+  // 'draft' routes into Draft Mode (decision 016): same blank house, but the
+  // workspace opens with the AI-draft flow (?draft=1). 'pipeline' (Founder
+  // Mode entry-point redesign, 2026-09-12, Samir's spec) opens the same
+  // blank house straight into the full-page reasoning-pipeline takeover
+  // instead (?pipeline=1) — see BuildHousePage's pipelineEntry prop /
+  // components/build/PipelineFullView.tsx.
+  async function handleCreate(entry?: 'draft' | 'pipeline') {
     if (creating) return
     setCreating(true)
     const supabase = createClient()
@@ -193,7 +197,8 @@ export default function DashboardPage() {
       setCreating(false)
       return
     }
-    router.push(`/build/${data.id}${draft ? '?draft=1' : ''}`)
+    const qs = entry === 'draft' ? '?draft=1' : entry === 'pipeline' ? '?pipeline=1' : ''
+    router.push(`/build/${data.id}${qs}`)
   }
 
   async function handleRename(id: string, title: string) {
@@ -374,7 +379,15 @@ export default function DashboardPage() {
     <>
       <CreateHouseCard onClick={() => handleCreate()} disabled={creating} />
       {canDraft && (
-        <CreateHouseCard onClick={() => handleCreate(true)} disabled={creating} label="Start with an AI draft" />
+        <CreateHouseCard onClick={() => handleCreate('draft')} disabled={creating} label="Start with an AI draft" />
+      )}
+      {/* Founder Mode entry-point redesign (2026-09-12, Samir's spec): "a
+          place at the bottom near new house where the entire house is just
+          the reasoning pipeline." Business mode only — general mode keeps
+          today's small rail card (components/build/rail/ReasoningPipelineCard.tsx)
+          unchanged. */}
+      {canDraft && workspaceMode === 'business' && (
+        <CreateHouseCard onClick={() => handleCreate('pipeline')} disabled={creating} label="Start with the reasoning pipeline" />
       )}
     </>
   )

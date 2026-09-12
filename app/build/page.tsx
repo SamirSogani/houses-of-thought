@@ -21,12 +21,16 @@ import { listProjects, type ProjectRow } from '@/lib/projects/data'
 export default function BuildPage({
   searchParams,
 }: {
-  searchParams: Promise<{ draft?: string; q?: string }>
+  searchParams: Promise<{ draft?: string; q?: string; pipeline?: string }>
 }) {
   const router = useRouter()
-  const { draft, q } = use(searchParams)
+  const { draft, q, pipeline } = use(searchParams)
   const draftRequested = draft === '1'
   const prefillQuestion = q?.trim() || null
+  // Founder Mode reasoning-pipeline entry point (2026-09-12, Samir's spec) —
+  // carried through to /build/[id] exactly like draftRequested above; see
+  // BuildHousePage's pipelineEntry prop / PipelineFullView.tsx.
+  const pipelineRequested = pipeline === '1'
 
   const [projectChoices, setProjectChoices] = useState<ProjectRow[] | null>(null)
   const [creating, setCreating] = useState(false)
@@ -49,9 +53,13 @@ export default function BuildPage({
         router.replace('/dashboard')
         return
       }
-      router.replace(`/build/${data.id}${draftRequested ? '?draft=1' : ''}`)
+      const params = new URLSearchParams()
+      if (draftRequested) params.set('draft', '1')
+      if (pipelineRequested) params.set('pipeline', '1')
+      const qs = params.toString()
+      router.replace(`/build/${data.id}${qs ? `?${qs}` : ''}`)
     },
-    [prefillQuestion, draftRequested, router]
+    [prefillQuestion, draftRequested, pipelineRequested, router]
   )
 
   useEffect(() => {

@@ -192,6 +192,15 @@ export const RunStateSchema = z.object({
   // computed yet" (undefined) — that distinction is what makes the
   // cache-or-compute check in route.ts work.
   ragText: z.string().nullish(),
+  // Business mode (decision 021, Phase 5) — companion to ragText above, same
+  // once-per-run caching (folded into the same patch by route.ts's
+  // withRagCache). Deliberately NOT the retrieved text itself (that's
+  // ragText, prompt-only) — just enough for the UI to say, plainly, that a
+  // step used the person's own project material and roughly which document
+  // it came from, mirroring InterviewCard's ragSources (decision 021 §5's
+  // "labeled, not laundered" requirement extends to the UI, not only the
+  // prompt). [] (not undefined) once computed and nothing was retrieved.
+  ragSources: z.array(z.object({ sourceType: z.enum(['document', 'house', 'project_context']), label: z.string() })).nullish(),
 })
 export type RunState = z.infer<typeof RunStateSchema>
 

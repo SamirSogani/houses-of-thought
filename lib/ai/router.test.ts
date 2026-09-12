@@ -72,14 +72,23 @@ function makeErr(status: number | undefined, message = 'provider error'): Error 
 
 function ask(
   role: 'coach' | 'critic' | 'suggestor' | 'drafter' | 'swarm' | 'synthesis',
-  overrides: { effort?: 'low' | 'high'; user?: string; allowHighReasoning?: boolean } = {}
+  overrides: {
+    effort?: 'low' | 'high'
+    user?: string
+    allowHighReasoning?: boolean
+    // Auto-repair tests (completeJSON's third pass) need string/array `.max()`
+    // constraints Schema doesn't have — everything else keeps using the
+    // shared default so those tests stay untouched.
+    schema?: z.ZodType<unknown>
+    schemaName?: string
+  } = {}
 ) {
   return completeJSON({
     role,
     system: 'sys',
     user: overrides.user ?? 'hi',
-    schema: Schema,
-    schemaName: 'test',
+    schema: overrides.schema ?? Schema,
+    schemaName: overrides.schemaName ?? 'test',
     effort: overrides.effort ?? 'low',
     allowHighReasoning: overrides.allowHighReasoning,
     maxTokens: 100,
@@ -121,11 +130,11 @@ describe('lane order and 429 cascade', () => {
     expect(calls.map((c) => c.provider)).toEqual(['deepinfra', 'mistral', 'groq'])
   })
 
-  it('realtime (coach|critic) tries deepinfra second, right after mistral, before groq', async () => {
-    script = (m) => (m === MODELS.mistral ? (() => { throw makeErr(429, 'rate limit') })() : OK)
+  it('realtime (coach|critic) tries mistral second, right after deepinfra, before groq', async () => {
+    script = (m) => (m === MODELS.deepinfra ? (() => { throw makeErr(429, 'rate limit') })() : OK)
     await expect(ask('critic')).resolves.toEqual({ ok: true })
     // provider, not model — deepinfra and groq now share the same model id.
-    expect(calls.map((c) => c.provider)).toEqual(['mistral', 'deepinfra'])
+    expect(calls.map((c) => c.provider)).toEqual(['deepinfra', 'mistral'])
   })
 })
 
@@ -228,7 +237,7 @@ describe('groq penalty box', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-16T12:00:00Z'))
 
-    // Call 1: mistral 429 → deepinfra 429 (relief valve also down) → groq qwen
+    // Call 1: deepinfra 429 → mistral 429 (fallback also down) → groq qwen
     // 429 (opens penalty) → gemini serves. Checked by PROVIDER throughout this
     // test, not model: deepinfra and groq's post-recovery fallback both serve
     // openai/gpt-oss-20b (see MODELS comment above), which would misfire once
@@ -240,7 +249,7 @@ describe('groq penalty box', () => {
     await expect(ask('coach')).resolves.toEqual({ ok: true })
     expect(calls.at(-1)?.provider).toBe('google')
 
-    // Call 2, inside the 30s box: groq is skipped entirely (deepinfra also
+    // Call 2, inside the 30s box: groq is skipped entirely (mistral also
     // down this call, so the chain still needs to reach gemini to prove it).
     calls.length = 0
     script = (_m, _params, provider) => {
@@ -248,20 +257,20 @@ describe('groq penalty box', () => {
       return OK
     }
     await ask('coach')
-    expect(calls.map((c) => c.provider)).toEqual(['mistral', 'deepinfra', 'google'])
+    expect(calls.map((c) => c.provider)).toEqual(['deepinfra', 'mistral', 'google'])
 
     // Call 3, after the box clears: groq returns on the SAFER model until a
     // success clears recovery.
     vi.setSystemTime(new Date('2026-07-16T12:00:31Z'))
     calls.length = 0
     await ask('coach')
-    expect(calls.map((c) => c.provider)).toEqual(['mistral', 'deepinfra', 'groq'])
+    expect(calls.map((c) => c.provider)).toEqual(['deepinfra', 'mistral', 'groq'])
     expect(calls.at(-1)?.model).toBe(MODELS.groqOss) // the safer post-recovery model
 
     // Call 4: recovery cleared by the success — back on qwen.
     calls.length = 0
     await ask('coach')
-    expect(calls.map((c) => c.provider)).toEqual(['mistral', 'deepinfra', 'groq'])
+    expect(calls.map((c) => c.provider)).toEqual(['deepinfra', 'mistral', 'groq'])
     expect(calls.at(-1)?.model).toBe(MODELS.groqQwen)
   })
 })
@@ -331,16 +340,16 @@ describe('drafter lane stress signal', () => {
 describe('transient vs terminal errors', () => {
   it('5xx cascades to the next target', async () => {
     script = (m) => {
-      if (m === MODELS.mistral) throw makeErr(500)
+      if (m === MODELS.deepinfra) throw makeErr(500)
       return OK
     }
     await expect(ask('coach')).resolves.toEqual({ ok: true })
-    expect(calls.map((c) => c.model)).toEqual([MODELS.mistral, MODELS.deepinfra])
+    expect(calls.map((c) => c.model)).toEqual([MODELS.deepinfra, MODELS.mistral])
   })
 
   it('timeout/network (no status) cascades', async () => {
     script = (m) => {
-      if (m === MODELS.mistral) throw makeErr(undefined, 'Request timed out.')
+      if (m === MODELS.deepinfra) throw makeErr(undefined, 'Request timed out.')
       return OK
     }
     await expect(ask('coach')).resolves.toEqual({ ok: true })
@@ -349,17 +358,17 @@ describe('transient vs terminal errors', () => {
 
   it('a sunset model id (404) cascades instead of killing the lane', async () => {
     script = (m) => {
-      if (m === MODELS.mistral) throw makeErr(404, 'model not found')
+      if (m === MODELS.deepinfra) throw makeErr(404, 'model not found')
       return OK
     }
     await expect(ask('coach')).resolves.toEqual({ ok: true })
-    expect(calls.map((c) => c.model)).toEqual([MODELS.mistral, MODELS.deepinfra])
+    expect(calls.map((c) => c.model)).toEqual([MODELS.deepinfra, MODELS.mistral])
   })
 
   it('empty generation cascades', async () => {
-    script = (m) => (m === MODELS.mistral ? '' : OK)
+    script = (m) => (m === MODELS.deepinfra ? '' : OK)
     await expect(ask('coach')).resolves.toEqual({ ok: true })
-    expect(calls.map((c) => c.model)).toEqual([MODELS.mistral, MODELS.deepinfra])
+    expect(calls.map((c) => c.model)).toEqual([MODELS.deepinfra, MODELS.mistral])
   })
 
   it("Groq's json_validate_failed (its own generation failing strict-schema validation) cascades, not thrown as a terminal 400", async () => {
@@ -414,11 +423,11 @@ describe('size-aware routing and overflow', () => {
 
   it('a provider-reported context overflow escalates to the next target', async () => {
     script = (m) => {
-      if (m === MODELS.mistral) throw makeErr(400, 'maximum context length exceeded')
+      if (m === MODELS.deepinfra) throw makeErr(400, 'maximum context length exceeded')
       return OK
     }
     await expect(ask('coach')).resolves.toEqual({ ok: true })
-    expect(calls.map((c) => c.model)).toEqual([MODELS.mistral, MODELS.deepinfra])
+    expect(calls.map((c) => c.model)).toEqual([MODELS.deepinfra, MODELS.mistral])
   })
 })
 
@@ -427,7 +436,7 @@ describe('chain deadline', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-16T12:00:00Z'))
     script = (m) => {
-      if (m === MODELS.mistral) {
+      if (m === MODELS.deepinfra) {
         // Simulate an attempt that consumed the whole budget before failing.
         vi.setSystemTime(new Date('2026-07-16T12:00:27Z'))
         throw makeErr(500)
@@ -461,6 +470,54 @@ describe('completeJSON self-correction', () => {
   it('two schema failures surface as 502 ai-invalid-output', async () => {
     script = () => '{"ok":"still-wrong"}'
     await expect(ask('suggestor')).rejects.toMatchObject({
+      status: 502,
+      message: 'ai-invalid-output',
+    })
+    expect(calls.length).toBe(2)
+  })
+})
+
+describe('completeJSON auto-repair (third pass, no extra call)', () => {
+  // Fires only after BOTH the first attempt and the schema-error retry fail
+  // — script below returns the same oversized shape both times, so these
+  // exercise the real "two real failures, then a local code-only repair"
+  // path, not a mocked shortcut.
+
+  it('repairs an oversized string field to its schema cap and succeeds', async () => {
+    const schema = z.object({ note: z.string().max(10) })
+    script = () => '{"note":"1234567890AB"}' // 12 chars, no spaces — hard cut, no word boundary
+    await expect(ask('suggestor', { schema, schemaName: 'repair-test' })).resolves.toEqual({
+      note: '1234567890',
+    })
+    expect(calls.length).toBe(2) // no third HTTP call — repair is local
+  })
+
+  it('repairs an oversized array field to its schema cap by dropping the excess tail', async () => {
+    const schema = z.object({ options: z.array(z.string()).max(3) })
+    script = () => '{"options":["a","b","c","d"]}'
+    await expect(ask('suggestor', { schema, schemaName: 'repair-test' })).resolves.toEqual({
+      options: ['a', 'b', 'c'],
+    })
+    expect(calls.length).toBe(2)
+  })
+
+  it('repairs a mix of oversized string and array fields in one pass', async () => {
+    const schema = z.object({ note: z.string().max(5), options: z.array(z.string()).max(2) })
+    script = () => '{"note":"toolong","options":["a","b","c"]}'
+    await expect(ask('suggestor', { schema, schemaName: 'repair-test' })).resolves.toEqual({
+      note: 'toolo',
+      options: ['a', 'b'],
+    })
+    expect(calls.length).toBe(2)
+  })
+
+  it('does not repair when a non-oversized issue is also present — still 502s', async () => {
+    // note is oversized (repairable) but count is missing entirely (not a
+    // too_big issue at all) — isRepairableIssue must reject the WHOLE set,
+    // not repair what it can and ignore the rest.
+    const schema = z.object({ note: z.string().max(5), count: z.number() })
+    script = () => '{"note":"toolong"}'
+    await expect(ask('suggestor', { schema, schemaName: 'repair-test' })).rejects.toMatchObject({
       status: 502,
       message: 'ai-invalid-output',
     })

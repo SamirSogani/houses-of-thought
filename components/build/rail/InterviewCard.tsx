@@ -65,6 +65,20 @@ export function InterviewCard({
   // (general mode, no project, or nothing relevant found).
   const [ragSources, setRagSources] = useState<{ sourceType: string; label: string }[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
+  // "Finish early"/HARD_STOP_TURNS collapse the tall chat transcript down to
+  // a short "Context set ✓" chip (the branch below) — on a rail/drawer that
+  // was scrolled down mid-conversation, the chip then renders above the
+  // viewport with nothing visibly changed, so the finish looked like it did
+  // nothing. justFinishedRef marks a completion THIS render cycle (never an
+  // ordinary mount with pre-existing aiContext) so the chip effect below
+  // scrolls it into view exactly once, right after it appears.
+  const chipRef = useRef<HTMLDivElement>(null)
+  const justFinishedRef = useRef(false)
+  useEffect(() => {
+    if (active || !state.aiContext || !justFinishedRef.current) return
+    justFinishedRef.current = false
+    chipRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [active, state.aiContext])
 
   const userTurns = transcript.filter((t) => t.role === 'user').length
 
@@ -102,6 +116,7 @@ export function InterviewCard({
       setRagSources(data.ragSources ?? [])
       if (data.done && data.context) {
         dispatch({ type: 'SET_AI_CONTEXT', context: data.context })
+        justFinishedRef.current = true
         setActive(false)
         setTranscript([])
       } else if (forceSummary) {
@@ -249,7 +264,7 @@ export function InterviewCard({
   // Collapsed chip once context exists.
   if (state.aiContext) {
     return (
-      <div style={cardStyle} className="fade-in">
+      <div ref={chipRef} style={cardStyle} className="fade-in">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontWeight: 600, fontSize: 12.5, color: 'var(--ink)' }}>Context set ✓</span>
           <button type="button" onClick={start} className="mono" style={{ ...linkBtn, fontSize: 10 }}>Redo</button>

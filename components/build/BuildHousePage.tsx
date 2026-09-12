@@ -24,6 +24,7 @@ import { SparkIcon } from './buildIcons'
 import { useIsMobile } from './useIsMobile'
 import { useDraftRunner } from './useDraftRunner'
 import { useReasoningPipelineRunner } from './useReasoningPipelineRunner'
+import { PipelineFullView, PipelineToggleButton } from './PipelineFullView'
 import { useHouseTabLock } from './useHouseTabLock'
 import { DraftCard } from './rail/DraftCard'
 import type { SuggestCache } from './rail/CopilotPanel'
@@ -46,6 +47,7 @@ export function BuildHousePage({
   feedback = null,
   draftEligible = false,
   draftEntry = false,
+  pipelineEntry = false,
   viewerCollaborator = false,
   team = null,
   hasSeenTour = true,
@@ -76,6 +78,11 @@ export function BuildHousePage({
   draftEligible?: boolean
   // True when the user arrived via "Start with an AI draft" (?draft=1).
   draftEntry?: boolean
+  // Founder Mode reasoning-pipeline entry point (2026-09-12, Samir's spec):
+  // true when the user arrived via the dashboard's "Start with the reasoning
+  // pipeline" card (?pipeline=1) — see PipelineFullView.tsx's own header
+  // comment for the full design. Only ever true for a fresh, blank house.
+  pipelineEntry?: boolean
   // Mechanism 1 ("Invite"): true when readOnly is true SPECIFICALLY because the
   // caller is a 'viewer' house_collaborators row (not a teacher/strawman case)
   // — the read-only banner reads differently for it.
@@ -108,6 +115,16 @@ export function BuildHousePage({
   // builder) — CopilotPanel falls back to the pre-pipeline interview+draft
   // offer whenever pipelineRunner is undefined.
   const reasoningPipelineRunner = useReasoningPipelineRunner(dispatch, canDraft ? houseId : undefined)
+  // Founder Mode entry-point redesign (2026-09-12, Samir's spec): a house
+  // arriving via ?pipeline=1 starts fully taken over by PipelineFullView
+  // instead of the normal canvas+rail — "Go to house" (in that view) and
+  // "Reasoning pipeline" (in the status row below, once a run exists) toggle
+  // this without ever remounting reasoningPipelineRunner, so a run in
+  // progress keeps advancing regardless of which view is showing. Ignored
+  // (falls straight through to the normal view) when the pipeline isn't
+  // actually available — canDraft false (e.g. a student account) would
+  // otherwise strand the person on a form whose Run button silently no-ops.
+  const [pipelineTakeover, setPipelineTakeover] = useState(pipelineEntry && canDraft)
   // Suggestion cache + interview session live here (like the draft runner) so
   // tab switches and the mobile drawer can't destroy them — a discarded cache
   // refires a paid suggest call; a discarded transcript loses the interview.
@@ -470,30 +487,48 @@ export function BuildHousePage({
           </div>
         )}
         {/* Status row: layer nav + save state + draft gate count. One nav for
-            every viewport (builder-workspace-redesign plan §2). */}
-        <div className="bhp-status-row" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '6px 24px', background: 'var(--white)', borderBottom: '1px solid var(--rule)' }}>
-          <LayerNav state={state} onGo={(n) => dispatch({ type: 'GO_STEP', n })} />
-          <div
-            className="mono bhp-status-meta"
-            role={save?.alert ? 'status' : undefined}
-            style={{ marginLeft: 'auto', flex: '0 0 auto', whiteSpace: 'nowrap', fontSize: 10, letterSpacing: '0.06em', color: save?.alert ? 'var(--warning-text)' : 'var(--ink-subtle)' }}
-          >
-            {effReadOnly ? 'Read-only' : save?.text}
-            {unclaimedCount > 0 && (
-              <>
-                <span aria-hidden="true"> · </span>
-                <span style={{ color: 'var(--amber-text)' }}>
-                  {unclaimedCount} of {draftedCount} drafted {draftedCount === 1 ? 'layer' : 'layers'} unclaimed
-                </span>
-              </>
-            )}
+            every viewport (builder-workspace-redesign plan §2). Hidden during
+            the pipeline takeover (PipelineFullView.tsx) — nothing here means
+            anything yet on a house that hasn't been reasoned through, and
+            navigating to a still-empty layer would be a dead click with the
+            canvas unmounted. */}
+        {!pipelineTakeover && (
+          <div className="bhp-status-row" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '6px 24px', background: 'var(--white)', borderBottom: '1px solid var(--rule)' }}>
+            <LayerNav state={state} onGo={(n) => dispatch({ type: 'GO_STEP', n })} />
+            <PipelineToggleButton runner={reasoningPipelineRunner} pipelineEntry={pipelineEntry} onOpen={() => setPipelineTakeover(true)} />
+            <div
+              className="mono bhp-status-meta"
+              role={save?.alert ? 'status' : undefined}
+              style={{ marginLeft: 'auto', flex: '0 0 auto', whiteSpace: 'nowrap', fontSize: 10, letterSpacing: '0.06em', color: save?.alert ? 'var(--warning-text)' : 'var(--ink-subtle)' }}
+            >
+              {effReadOnly ? 'Read-only' : save?.text}
+              {unclaimedCount > 0 && (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  <span style={{ color: 'var(--amber-text)' }}>
+                    {unclaimedCount} of {draftedCount} drafted {draftedCount === 1 ? 'layer' : 'layers'} unclaimed
+                  </span>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-        {houseId && feedback && (
+        )}
+        {!pipelineTakeover && houseId && feedback && (
           <SubmissionFeedback houseId={houseId} mode={feedback} house={feedbackHouse} />
         )}
       </header>
 
+      {/* Founder Mode entry-point redesign: full takeover, no canvas/rail at
+          all, while pipelineTakeover is true. */}
+      {pipelineTakeover && canDraft ? (
+        <PipelineFullView
+          state={state}
+          dispatch={guardedDispatch}
+          runner={reasoningPipelineRunner}
+          onGoToHouse={() => setPipelineTakeover(false)}
+        />
+      ) : (
+      <>
       {/* Two-column row (desktop) / document only (mobile) */}
       <div style={{ flex: '1 1 auto', display: 'flex', minHeight: 0 }}>
         <Canvas
@@ -567,6 +602,8 @@ export function BuildHousePage({
           restrictAuthorship={modeLocked}
           houseId={houseId}
         />
+      )}
+      </>
       )}
 
       {/* Undo chip: appears beside the toast after a destructive remove. */}
