@@ -1,10 +1,15 @@
-# Plan — Business/solo-founder mode (Projects, accumulating context, RAG)
+# Plan — Founder Mode (Projects, accumulating context, RAG)
 
-**Scoped:** 2026-09-11 · **Status:** Not started — planning only.
+**Scoped:** 2026-09-11 · **Status:** All 5 phases shipped and merged to main
+2026-09-11 (migrations 0048–0051 applied).
 **Implements:** [decision 021](../../../decisions/021-business-mode-projects-and-rag.md),
 which also records why this is an opt-in extension rather than a reversal of
 the schools-first strategy in
-[context/vision/product-strategy.md](../../../context/vision/product-strategy.md).
+[context/vision/product-strategy.md](../../../context/vision/product-strategy.md)
+— see that decision for the **Founder Mode** product-name note (decided
+2026-09-11, end of the implementation session). This doc and the phase docs
+below still use the working name "business mode" throughout; that's the
+same feature.
 
 ## Mission
 
@@ -36,13 +41,13 @@ invariants" still applies without exception. In addition:
 
 ## Phases — execute in order; each is independently shippable
 
-| Phase | Doc | Delivers |
-|---|---|---|
-| 1 | [01-projects-and-toggle.md](01-projects-and-toggle.md) | `workspace_mode` toggle + `projects` table/CRUD UI + houses linkable to a project. No AI changes. |
-| 2 | [02-business-prompts.md](02-business-prompts.md) | Business-mode prompt/persona variants in Collab and the reasoning pipeline. |
-| 3 | [03-accumulating-context.md](03-accumulating-context.md) | Structured per-project context (facts, stage, stakeholders) that accumulates across sessions and feeds AI framing. |
-| 4 | [04-document-upload.md](04-document-upload.md) | Per-project document upload (Supabase Storage) + text extraction. |
-| 5 | [05-rag-retrieval.md](05-rag-retrieval.md) | `pgvector` embeddings + retrieval wired into house-building, with provenance tagging. |
+| Phase | Doc | Delivers | Status |
+|---|---|---|---|
+| 1 | [01-projects-and-toggle.md](01-projects-and-toggle.md) | `workspace_mode` toggle + `projects` table/CRUD UI + houses linkable to a project. No AI changes. | ✅ Shipped (migration 0048) |
+| 2 | [02-business-prompts.md](02-business-prompts.md) | Business-mode prompt/persona variants in Collab and the reasoning pipeline. | ✅ Shipped (no schema change) |
+| 3 | [03-accumulating-context.md](03-accumulating-context.md) | Structured per-project context (facts, stage, stakeholders) that accumulates across sessions and feeds AI framing. | ✅ Shipped (migration 0049) |
+| 4 | [04-document-upload.md](04-document-upload.md) | Per-project document upload (Supabase Storage) + text extraction. | ✅ Shipped (migration 0050) |
+| 5 | [05-rag-retrieval.md](05-rag-retrieval.md) | `pgvector` embeddings + retrieval wired into house-building, with provenance tagging. | ✅ Shipped (migration 0051; DeepInfra/BAAI/bge-m3) |
 
 Phases 1–3 have no new external dependencies and no meaningful cost surface.
 Phases 4–5 introduce file storage, a parsing step, and a third-party
