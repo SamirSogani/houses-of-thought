@@ -11,7 +11,7 @@ import { capabilitiesFor } from '@/lib/auth/capabilities'
 
 // Columns selected for the form — keep in sync with ProfileRow.
 const PROFILE_COLUMNS =
-  'username, account_type, about_me, current_project, role, location, perspectives'
+  'username, account_type, workspace_mode, about_me, current_project, role, location, perspectives'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -85,6 +85,7 @@ export default function ProfilePage() {
         active="profile"
         showClassroom={initial.accountType === 'teacher' || initial.accountType === 'student'}
         classroomHref={capabilitiesFor(initial.accountType).canCreateClasses ? '/classroom' : '/classes'}
+        showProjects={initial.workspaceMode === 'business'}
       />
 
       <main style={{ flex: '1 1 auto' }}>

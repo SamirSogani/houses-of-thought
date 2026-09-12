@@ -10,8 +10,10 @@ import { z } from 'zod'
 import { completeJSON, AiError } from '@/lib/ai/router'
 import { enforceAiLimit } from '@/lib/ai/limits'
 import { braveSearch } from '@/lib/ai/brave'
-import { PERSONA, QUERY_BLOCK, RESEARCH_BLOCK } from '@/lib/ai/prompts'
+import { getCallerWorkspaceMode } from '@/lib/auth/account'
+import { PERSONA, QUERY_BLOCK, researchBlock } from '@/lib/ai/prompts'
 import { serializeHouseForPrompt, type HouseForPrompt } from '@/lib/ai/serialize'
+import { normalizeProjectContext } from '@/lib/projects/data'
 
 export const maxDuration = 30
 
@@ -20,6 +22,9 @@ const MAX_BODY_BYTES = 100 * 1024
 const RequestSchema = z.object({
   house: z.record(z.string(), z.unknown()),
   query: z.string().optional(),
+  // Business mode (decision 021, Phase 3): see suggest/route.ts's own comment
+  // on this same field.
+  projectContext: z.unknown().optional(),
 })
 
 const QuerySchema = z.object({ query: z.string() })
@@ -61,9 +66,16 @@ export async function POST(req: Request): Promise<Response> {
   if (!parsed.success) {
     return NextResponse.json({ error: 'invalid-request' }, { status: 400 })
   }
-  const { house } = parsed.data
+  const { house, projectContext } = parsed.data
   const houseForPrompt = house as HouseForPrompt
-  const houseText = serializeHouseForPrompt(houseForPrompt)
+  // Project context folds in here (both the query-derivation and synthesis
+  // calls below read houseText) — it's informational, not a rules variant
+  // like workspaceMode, so both benefit equally.
+  const houseText = serializeHouseForPrompt(houseForPrompt, undefined, normalizeProjectContext(projectContext))
+  // Business mode (decision 021): read once from the caller's own profile —
+  // never from the request body. Only the synthesis step's evidence framing
+  // varies; the query-derivation call below stays on the plain QUERY_BLOCK.
+  const workspaceMode = await getCallerWorkspaceMode()
 
   try {
     // 1. Query: user-typed focus, else derive one from the house.
@@ -94,7 +106,7 @@ export async function POST(req: Request): Promise<Response> {
       .join('\n\n')
     const { candidates } = await completeJSON({
       role: 'drafter',
-      system: `${PERSONA}\n\n${RESEARCH_BLOCK}`,
+      system: `${PERSONA}\n\n${researchBlock(workspaceMode)}`,
       user: `${houseText}\n\n## Search results (query: "${query}")\n${numbered}`,
       schema: CandidatesSchema,
       schemaName: 'research_candidates',

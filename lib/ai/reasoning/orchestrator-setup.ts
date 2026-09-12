@@ -18,7 +18,7 @@ import {
 import {
   REASONING_PERSONA,
   CONTEXT_GATHER_BLOCK,
-  FRAME_BLOCK,
+  frameBlock,
   BREADTH_SCOPING_BLOCK,
   serializeFrame,
   appendRegenerationFeedback,
@@ -27,6 +27,7 @@ import {
 import { runReviewPanel } from './orchestrator-panel'
 import { runSearches } from './search'
 import { clampN } from './budget'
+import type { WorkspaceMode } from '@/lib/profile/data'
 
 if (typeof window !== 'undefined') {
   throw new Error('lib/ai/reasoning/orchestrator-setup.ts is server-only and must not run in the browser')
@@ -97,7 +98,12 @@ export async function runFrameGenerate(
   // takes priority over repair's raw per-standard notes when present (the two
   // are never both set: masterGuidance only exists once repair's own attempts
   // are exhausted).
-  masterGuidance?: { priorFrame: FramePacket; guidance: MasterReviewGuidance }
+  masterGuidance?: { priorFrame: FramePacket; guidance: MasterReviewGuidance },
+  // Business mode (decision 021): defaults to 'general' so the admin-only
+  // pipeline (no per-caller workspace concept, and not to be touched —
+  // plan doc 27) keeps calling this unchanged; the house-scoped route passes
+  // the caller's real value through.
+  workspaceMode: WorkspaceMode = 'general'
 ): Promise<FramePacket> {
   if (dryRun) {
     return {
@@ -114,7 +120,7 @@ export async function runFrameGenerate(
   const isRepair = !!repair || !!masterGuidance
   const modelOut = await completeJSON({
     role: 'swarm',
-    system: `${REASONING_PERSONA}\n\n${FRAME_BLOCK}`,
+    system: `${REASONING_PERSONA}\n\n${frameBlock(workspaceMode)}`,
     user: masterGuidance
       ? appendMasterGuidance(baseContext, masterGuidance.priorFrame, masterGuidance.guidance)
       : appendRegenerationFeedback(

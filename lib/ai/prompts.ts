@@ -1,6 +1,18 @@
 // Shared persona + per-capability system-prompt builders. Every AI route composes
 // its system prompt as PERSONA + a capability block, so the hard rules live in
 // exactly one place. Client-safe (plain strings, no server imports).
+//
+// Business mode (decision 021, plans/active/business-mode/02-business-prompts.md):
+// the four blocks behind suggest/interview/research/critique are functions of
+// `workspaceMode`, not constants — a 'business' call gets the SAME section
+// structure with business-flavored examples/framing spliced in, never a forked
+// prompt or a relaxed rule. Every other block in this file is mode-independent
+// and stays a plain constant; only these four carry a variant, per the phase
+// doc's explicit scope. `workspaceMode` is resolved server-side per request
+// (lib/auth/account.ts's getCallerWorkspaceMode) — never trust a client-supplied
+// value for it.
+
+import type { WorkspaceMode } from '@/lib/profile/data'
 
 // Used by every route. States the reasoning frame and the non-negotiable rules —
 // the conclusion/question/purpose ban is enforced in the AiAction type too
@@ -14,10 +26,18 @@ Hard rules:
 - Plain, direct language — no lecturing.
 - On medical, legal, or financial questions, offer considerations, never directives.`
 
-// Capability block for POST /api/ai/suggest. Composed as PERSONA + SUGGEST_BLOCK.
+// Capability block for POST /api/ai/suggest. Composed as PERSONA + suggestBlock().
 // The model always fills all three renderings (observation / suggestion /
 // question); the client picks by mode, so switching modes needs no refetch.
-export const SUGGEST_BLOCK = `Task: examine ONLY the focused layer (marked ">> FOCUS"), in the context of the whole house. Return 2–4 findings a thoughtful teacher would raise — real gaps, not compliments.
+// Business variant: same rules and output shape, framed around stakeholders,
+// market/unit-economics evidence, and business consequences (decision 021).
+export function suggestBlock(workspaceMode: WorkspaceMode): string {
+  const critic = workspaceMode === 'business' ? 'a sharp business advisor' : 'a thoughtful teacher'
+  const businessLens =
+    workspaceMode === 'business'
+      ? `\n\nThis house concerns a business or venture: where the focused layer allows it, favor findings about stakeholders (customers, team, investors) over generic "perspectives," evidence grounded in market dynamics and unit economics over anecdote, and consequences for runway, hiring, or fundraising over abstract outcomes.`
+      : ''
+  return `Task: examine ONLY the focused layer (marked ">> FOCUS"), in the context of the whole house. Return 2–4 findings ${critic} would raise — real gaps, not compliments.${businessLens}
 
 Ground every finding in what the person actually wrote; quote short fragments of their text. For each finding provide:
 - observation: one plain sentence naming what you noticed.
@@ -26,37 +46,66 @@ Ground every finding in what the person actually wrote; quote short fragments of
 - action: include one ONLY when the move is adding a concrete item to the house; otherwise null.
 
 If the focused layer is empty, findings should help them start, seeded from their question and context. The "layer" number on every finding must equal the focused step. Never propose text for the conclusion, reasoning, question, or purpose.`
+}
 
-// Capability block for POST /api/ai/interview. Composed as PERSONA + INTERVIEW_BLOCK.
-// It elicits the person's own thinking (Coach-safe), so both modes get it.
-export const INTERVIEW_BLOCK = `Task: conduct a short intake interview so the co-pilot understands this house.
+// Capability block for POST /api/ai/interview. Composed as PERSONA +
+// interviewBlock(). It elicits the person's own thinking (Coach-safe), so both
+// modes get it. Business variant (decision 021, 05-interviewer.md): the same
+// five-topic cover list and done/context contract, with business-flavored
+// topics and fact examples in place of the generic ones.
+export function interviewBlock(workspaceMode: WorkspaceMode): string {
+  const business = workspaceMode === 'business'
+  const cover = business
+    ? `This house concerns a business or venture — cover, adapting to what the house already shows: who the customer or user is; what stage it's at (idea, building, launched, scaling); what they have tried or validated so far; constraints (runway, team, time, authority); what a good outcome looks like.`
+    : `Cover, adapting to what the house already shows: what the question really is and why now; who is affected; what they have tried or already believe; constraints (time, money, authority); what a good outcome looks like.`
+  const factsExample = business
+    ? `"Stage: pre-launch, validating demand", "Runway: 6 months"`
+    : `"Deadline: end of term", "Has authority over X, not Y"`
+  return `Task: conduct a short intake interview so the co-pilot understands this house.
 
-Ask ONE question at a time, at most 2 sentences, warm and plain. Cover, adapting to what the house already shows: what the question really is and why now; who is affected; what they have tried or already believe; constraints (time, money, authority); what a good outcome looks like. Never propose answers or content for the house.
+Ask ONE question at a time, at most 2 sentences, warm and plain. ${cover} Never propose answers or content for the house.
 
 After at most 5 questions — fewer if the picture is clear — set done=true, reply with a one-line close, and produce context:
 - summary: at most 120 words, written in the second person ("You are deciding…").
-- facts: 3–8 short, concrete, reusable strings ("Deadline: end of term", "Has authority over X, not Y").
+- facts: 3–8 short, concrete, reusable strings (${factsExample}).
 
 While still interviewing, set done=false, put your next question in reply, and leave context null. When done=true, context must be non-null.`
+}
 
 // Derives a web-search query from the house when the person didn't type one.
 // Composed as PERSONA + QUERY_BLOCK.
 export const QUERY_BLOCK = `Task: write ONE concise web-search query (3–10 words) that would surface evidence for this house's question. Use the question, concepts, and any interview context. Return only the query — no operators, no quotes, no commentary.`
 
 // Extracts candidate evidence from Brave results ONLY. Composed as
-// PERSONA + RESEARCH_BLOCK.
-export const RESEARCH_BLOCK = `Task: extract candidate evidence FOR THIS HOUSE from the numbered search results below — and ONLY from them.
+// PERSONA + researchBlock(). Business variant: a preference for market/unit-
+// economics evidence when the results offer it — never at the expense of the
+// rules below (route.ts also hard-filters candidates against the actual
+// result URLs, so this preference can't weaken that invariant either way).
+export function researchBlock(workspaceMode: WorkspaceMode): string {
+  const businessLens =
+    workspaceMode === 'business'
+      ? `\n\nThis house concerns a business or venture: when the results offer a choice, prefer claims about market size or dynamics, competitors, unit economics, and customer/user behavior over generic commentary — but never at the expense of the rules below.`
+      : ''
+  return `Task: extract candidate evidence FOR THIS HOUSE from the numbered search results below — and ONLY from them.${businessLens}
 
 Rules:
 - Each claim must be supported by a specific result. Copy that result's URL EXACTLY as given; never alter, guess, or invent a URL.
 - Never invent or embellish beyond what a result's description states. Descriptions are short snippets — keep each claim modest and checkable.
 - Prefer a spread of sources, including ones that disagree, over piling onto one side.
 - Return at most 5 candidates. If nothing in the results genuinely supports the house, return an empty list.`
+}
 
 // Socratic critic for POST /api/ai/critique (the Review layer). Composed as
-// PERSONA + CRITIQUE_BLOCK. Commentary only — it never touches the deterministic
-// House Strength score.
-export const CRITIQUE_BLOCK = `Task: review the WHOLE house as a firm, fair critic, using the Paul–Elder intellectual standards.
+// PERSONA + critiqueBlock(). Commentary only — it never touches the
+// deterministic House Strength score. Business variant: the same six
+// standards and output shape, weighing business-shaped gaps as heavily as any
+// other (decision 021).
+export function critiqueBlock(workspaceMode: WorkspaceMode): string {
+  const businessLens =
+    workspaceMode === 'business'
+      ? `\n\nThis house concerns a business or venture: weigh unvalidated market assumptions, thin unit-economics evidence, overlooked stakeholders (customers, team, investors), and unexamined consequences for runway, hiring, or fundraising as heavily as any other gap.`
+      : ''
+  return `Task: review the WHOLE house as a firm, fair critic, using the Paul–Elder intellectual standards.${businessLens}
 
 Grade what is actually on the page — quote short fragments of the person's own text. An empty layer is evidence of a gap, not neutral.
 
@@ -70,6 +119,7 @@ For each of the six standards (clarity, accuracy, depth, breadth, logic, fairnes
 Also identify weakestLink: the single point where the house most likely fails — prefer load-bearing assumptions and conclusion–evidence gaps. Give its layer number (1–7), why it is the weak point, and a question that exposes it.
 
 Never propose text for the conclusion, reasoning, question, or purpose.`
+}
 
 // Draft Mode (POST /api/ai/draft; decision 016). Composed as PERSONA +
 // DRAFT_COMMON + DRAFT_STAGE_BLOCKS[stage] — unlike the strawman and mini house,

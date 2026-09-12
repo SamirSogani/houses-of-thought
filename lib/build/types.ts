@@ -2,6 +2,7 @@
 
 import type { AiAction } from '@/lib/ai/findings'
 import type { DraftStage, DraftState } from '@/lib/ai/draft'
+import type { ProjectContext } from '@/lib/projects/data'
 
 export type PersonKey = 'you' | 'maya' | 'devan' | 'ai'
 
@@ -103,6 +104,15 @@ export interface State {
   unc: Implication[]
   watchpoints: string[]
   activePerspective: number | null
+  // Business mode (decision 021, Phase 3, plans/active/business-mode/
+  // 03-accumulating-context.md): the project this house belongs to, and its
+  // accumulated context — set ONCE at load from houses.project_id /
+  // projects.context (app/build/[id]/page.tsx), read-only from here on. NOT
+  // in lib/build/persistence.ts's PERSISTED_KEYS: this mirrors PROJECT data,
+  // not house data — it round-trips through lib/projects/data.ts, never
+  // through saveHouse, and must never be autosaved back onto the house row.
+  projectId: string | null
+  projectContext: ProjectContext | null
 }
 
 export type ImplicationKind = 'pos' | 'neg' | 'unc'

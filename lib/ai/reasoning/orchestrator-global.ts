@@ -30,11 +30,11 @@ import {
 import {
   REASONING_PERSONA,
   GLOBAL_ASSUMPTIONS_BLOCK,
-  GLOBAL_EVIDENCE_STRATEGY_BLOCK,
-  GLOBAL_EVIDENCE_POPULATE_BLOCK,
+  globalEvidenceStrategyBlock,
+  globalEvidencePopulateBlock,
   GLOBAL_EVIDENCE_CONFIDENCE_BLOCK,
   CONCLUSIONS_BLOCK,
-  IMPLICATIONS_BLOCK,
+  implicationsBlock,
   FINAL_COMPOSITION_BLOCK,
   serializeFrame,
   serializePerspectives,
@@ -43,6 +43,7 @@ import {
   formatGatherHistory,
 } from './prompts'
 import { REPAIR_TOKEN_HEADROOM } from './budget'
+import type { WorkspaceMode } from '@/lib/profile/data'
 
 // Shared shape for "regenerate this after a failed panel verdict" across the
 // hard-block global/conclusions/implications generators below.
@@ -154,7 +155,10 @@ export async function runGlobalEvidenceStrategy(
   priorGatherHistory?: string | null,
   repair?: Repair<GlobalEvidencePacket>,
   extraContext?: string | null,
-  masterGuidance?: MasterGuided<GlobalEvidencePacket>
+  masterGuidance?: MasterGuided<GlobalEvidencePacket>,
+  // Business mode (decision 021): defaults to 'general' so the admin-only
+  // pipeline (not to be touched — plan doc 27) keeps calling this unchanged.
+  workspaceMode: WorkspaceMode = 'general'
 ): Promise<EvidenceStrategy> {
   if (dryRun) {
     if (forceNeedsInput) {
@@ -170,7 +174,7 @@ export async function runGlobalEvidenceStrategy(
   const context = questionContext(frame, bundles, extraContext) + formatGatherHistory(priorGatherHistory)
   return completeJSON({
     role: 'swarm',
-    system: `${REASONING_PERSONA}\n\n${GLOBAL_EVIDENCE_STRATEGY_BLOCK}`,
+    system: `${REASONING_PERSONA}\n\n${globalEvidenceStrategyBlock(workspaceMode)}`,
     user: masterGuidance
       ? appendMasterGuidance(context, masterGuidance.priorArtifact, masterGuidance.guidance)
       : appendRegenerationFeedback(context, repair),
@@ -200,7 +204,10 @@ export async function runGlobalEvidencePopulate(
   dryRun: boolean,
   repair?: Repair<GlobalEvidencePacket>,
   extraContext?: string | null,
-  masterGuidance?: MasterGuided<GlobalEvidencePacket>
+  masterGuidance?: MasterGuided<GlobalEvidencePacket>,
+  // Business mode (decision 021): defaults to 'general' so the admin-only
+  // pipeline (not to be touched — plan doc 27) keeps calling this unchanged.
+  workspaceMode: WorkspaceMode = 'general'
 ): Promise<GlobalEvidenceItemDraft[]> {
   if (dryRun) return [{ claim_id: '[dry run] claim', source_ref: '[dry run] source' }]
   const isRepair = !!repair || !!masterGuidance
@@ -210,7 +217,7 @@ export async function runGlobalEvidencePopulate(
   if (userAnswer) context += `\n\n## The person's answer to your question\n${userAnswer}`
   const out = await completeJSON({
     role: 'swarm',
-    system: `${REASONING_PERSONA}\n\n${GLOBAL_EVIDENCE_POPULATE_BLOCK}`,
+    system: `${REASONING_PERSONA}\n\n${globalEvidencePopulateBlock(workspaceMode)}`,
     user: masterGuidance
       ? appendMasterGuidance(context, masterGuidance.priorArtifact, masterGuidance.guidance)
       : appendRegenerationFeedback(context, repair),
@@ -341,7 +348,10 @@ export async function runImplicationsGenerate(
   dryRun: boolean,
   repair?: Repair<ImplicationsPacket>,
   extraContext?: string | null,
-  masterGuidance?: MasterGuided<ImplicationsPacket>
+  masterGuidance?: MasterGuided<ImplicationsPacket>,
+  // Business mode (decision 021): defaults to 'general' so the admin-only
+  // pipeline (not to be touched — plan doc 27) keeps calling this unchanged.
+  workspaceMode: WorkspaceMode = 'general'
 ): Promise<ImplicationsPacket> {
   if (dryRun) {
     return {
@@ -357,7 +367,7 @@ export async function runImplicationsGenerate(
   const isRepair = !!repair || !!masterGuidance
   return completeJSON({
     role: 'swarm',
-    system: `${REASONING_PERSONA}\n\n${IMPLICATIONS_BLOCK}`,
+    system: `${REASONING_PERSONA}\n\n${implicationsBlock(workspaceMode)}`,
     user: masterGuidance
       ? appendMasterGuidance(context, masterGuidance.priorArtifact, masterGuidance.guidance)
       : appendRegenerationFeedback(context, repair),

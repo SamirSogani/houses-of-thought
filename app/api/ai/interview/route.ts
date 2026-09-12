@@ -7,8 +7,13 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { completeJSON, AiError } from '@/lib/ai/router'
 import { enforceAiLimit } from '@/lib/ai/limits'
-import { PERSONA, INTERVIEW_BLOCK } from '@/lib/ai/prompts'
+import { getCallerWorkspaceMode } from '@/lib/auth/account'
+import { createClient } from '@/lib/supabase/server'
+import { log } from '@/lib/log'
+import { PERSONA, interviewBlock } from '@/lib/ai/prompts'
 import { serializeHouseForPrompt, type HouseForPrompt } from '@/lib/ai/serialize'
+import { normalizeProjectContext } from '@/lib/projects/data'
+import { retrieveProjectChunks, formatRagChunksForPrompt, type RagSourceType } from '@/lib/ai/rag'
 
 export const maxDuration = 30
 
@@ -50,6 +55,15 @@ const RequestSchema = z.object({
     })
   ),
   forceSummary: z.boolean().optional(),
+  // Business mode (decision 021, Phase 3): see suggest/route.ts's own comment
+  // on this same field — client-supplied, normalized rather than schema-
+  // validated, same trust boundary as `house`.
+  projectContext: z.unknown().optional(),
+  // Business mode (decision 021, Phase 5): the house's project, for RAG
+  // retrieval below. Client-supplied but RLS-safe — retrieveProjectChunks
+  // can only ever return rows the caller's own owner_id already covers, same
+  // trust boundary as projectContext just above.
+  projectId: z.string().uuid().optional(),
 })
 
 // context is non-null iff done — enforced by the refine, not just the prompt:
@@ -93,7 +107,7 @@ export async function POST(req: Request): Promise<Response> {
   if (!parsed.success) {
     return NextResponse.json({ error: 'invalid-request' }, { status: 400 })
   }
-  const { house, transcript, forceSummary } = parsed.data
+  const { house, transcript, forceSummary, projectContext, projectId } = parsed.data
 
   // Only reject on genuine abuse. A merely-long interview wraps up gracefully
   // below instead of 413-ing, so the intake work is never lost.
@@ -106,16 +120,60 @@ export async function POST(req: Request): Promise<Response> {
   // folded (and, when long, condensed) into the prompt rather than sent as turns.
   const convo = buildConvo(transcript as Turn[])
 
+  // Business mode (decision 021): read once from the caller's own profile —
+  // never from the request body. Both modes get the interviewer either way.
+  const workspaceMode = await getCallerWorkspaceMode()
+  const block = interviewBlock(workspaceMode)
   const system = mustWrapUp
-    ? `${PERSONA}\n\n${INTERVIEW_BLOCK}\n\nYou must finish NOW: set done=true and produce the context.`
-    : `${PERSONA}\n\n${INTERVIEW_BLOCK}`
+    ? `${PERSONA}\n\n${block}\n\nYou must finish NOW: set done=true and produce the context.`
+    : `${PERSONA}\n\n${block}`
 
   // The closing directive goes LAST in the user message (most recent instruction)
   // so a low-effort model reliably wraps up instead of asking another question.
   const closing = mustWrapUp
     ? 'STOP INTERVIEWING. Do NOT ask another question. Set done=true and output context (summary + facts) now, using only what has already been said.'
     : 'Produce the next interview step as JSON.'
-  const user = `${serializeHouseForPrompt(house as HouseForPrompt)}\n\n## Conversation so far\n${convo}\n\n${closing}`
+
+  // RAG retrieval (Phase 5, decision 021): only when business mode AND the
+  // client actually named a project — a general-mode caller incurs ZERO
+  // embedding-generation cost, full stop, regardless of whether they have
+  // projects (the plan doc's own explicit manual-verification bullet).
+  // Query text: the house's own typed question if set, else the most recent
+  // thing the person said — there's often no question yet this early in an
+  // interview. ragSources (label per retrieved chunk) rides back to the
+  // client so InterviewCard can show, in the UI, that this used the
+  // person's own project material — never presented as Research Mode's
+  // Brave-sourced evidence (decision 021 §5's UI-distinction requirement).
+  const houseForPrompt = house as HouseForPrompt
+  const lastUserTurn = [...(transcript as Turn[])].reverse().find((t) => t.role === 'user')?.content ?? ''
+  const retrievalQuery = (houseForPrompt.question || lastUserTurn).trim()
+  let ragBlock = ''
+  const ragSources: { sourceType: RagSourceType; label: string }[] = []
+  if (workspaceMode === 'business' && projectId && retrievalQuery) {
+    try {
+      const supabase = await createClient()
+      const chunks = await retrieveProjectChunks(supabase, projectId, retrievalQuery, 5)
+      ragBlock = formatRagChunksForPrompt(chunks)
+      const docIds = [...new Set(chunks.filter((c) => c.sourceType === 'document' && c.sourceId).map((c) => c.sourceId as string))]
+      const filenameById = new Map<string, string>()
+      if (docIds.length > 0) {
+        const { data: docs } = await supabase.from('project_documents').select('id, filename').in('id', docIds)
+        for (const d of (docs ?? []) as { id: string; filename: string }[]) filenameById.set(d.id, d.filename)
+      }
+      for (const c of chunks) {
+        ragSources.push({
+          sourceType: c.sourceType,
+          label: c.sourceType === 'document' && c.sourceId ? (filenameById.get(c.sourceId) ?? 'a document') : 'your project notes',
+        })
+      }
+    } catch (err) {
+      // Retrieval failing must never break the interview itself — the
+      // interview still works exactly as it did before Phase 5.
+      log.error('ai/interview', 'RAG retrieval failed', { error: (err as Error)?.message })
+    }
+  }
+
+  const user = `${serializeHouseForPrompt(houseForPrompt, undefined, normalizeProjectContext(projectContext))}${ragBlock ? `\n\n${ragBlock}` : ''}\n\n## Conversation so far\n${convo}\n\n${closing}`
 
   try {
     // Context-intake can accumulate a large prompt (house + transcript). The
@@ -131,7 +189,10 @@ export async function POST(req: Request): Promise<Response> {
       effort: 'low',
       maxTokens: 600,
     })
-    return NextResponse.json(result)
+    // ragSources: [] on every general-mode / no-project / nothing-retrieved
+    // call — always present so the client never has to special-case its
+    // absence, but empty means exactly what it says (decision 021 §5).
+    return NextResponse.json({ ...result, ragSources })
   } catch (err) {
     if (err instanceof AiError) {
       return NextResponse.json({ error: err.message }, { status: err.status })

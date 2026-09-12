@@ -11,9 +11,10 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { completeJSON, AiError } from '@/lib/ai/router'
 import { enforceAiLimit } from '@/lib/ai/limits'
-import { getCallerCapabilities } from '@/lib/auth/account'
-import { PERSONA, CRITIQUE_BLOCK } from '@/lib/ai/prompts'
+import { getCallerCapabilities, getCallerWorkspaceMode } from '@/lib/auth/account'
+import { PERSONA, critiqueBlock } from '@/lib/ai/prompts'
 import { serializeHouseForPrompt, type HouseForPrompt } from '@/lib/ai/serialize'
+import { normalizeProjectContext } from '@/lib/projects/data'
 
 export const maxDuration = 30
 
@@ -24,6 +25,9 @@ const STANDARDS = ['clarity', 'accuracy', 'depth', 'breadth', 'logic', 'fairness
 
 const RequestSchema = z.object({
   house: z.record(z.string(), z.unknown()),
+  // Business mode (decision 021, Phase 3): see suggest/route.ts's own comment
+  // on this same field.
+  projectContext: z.unknown().optional(),
 })
 
 const CritiqueSchema = z.object({
@@ -100,9 +104,16 @@ export async function POST(req: Request): Promise<Response> {
   // the invariant can't be bypassed by calling this route directly instead of
   // /suggest. Resolved once here (getCallerCapabilities reads the stored role).
   const coachOnly = (await getCallerCapabilities()).aiPosture === 'coach'
+  // Business mode (decision 021): read once from the caller's own profile —
+  // never from the request body.
+  const workspaceMode = await getCallerWorkspaceMode()
 
-  const system = `${PERSONA}\n\n${CRITIQUE_BLOCK}`
-  const user = serializeHouseForPrompt(parsed.data.house as HouseForPrompt)
+  const system = `${PERSONA}\n\n${critiqueBlock(workspaceMode)}`
+  const user = serializeHouseForPrompt(
+    parsed.data.house as HouseForPrompt,
+    undefined,
+    normalizeProjectContext(parsed.data.projectContext)
+  )
 
   try {
     const critique = await completeJSON({

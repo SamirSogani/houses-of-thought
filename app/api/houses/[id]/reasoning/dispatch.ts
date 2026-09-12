@@ -62,6 +62,7 @@ import {
   buildAdHocContext,
   degradedLayerNotes,
 } from '@/app/api/admin/reasoning/route-schema'
+import type { WorkspaceMode } from '@/lib/profile/data'
 
 // Derived from the route's own request schema rather than hand-written, so
 // these can never drift from what POST actually parses — `step` is wider
@@ -84,6 +85,10 @@ export interface StepDispatchContext {
   // conclusions-generate case, which must fall back to perspectivePartials
   // when run.perspectives is absent (express skips evidence + review).
   mode: PipelineMode
+  // Business mode (decision 021): the CALLER's own workspace_mode (route.ts's
+  // getCallerWorkspaceMode) — read once per request, never client-supplied.
+  // Threaded only into the 5 generate calls confirmed to need it below.
+  workspaceMode: WorkspaceMode
   ok: (step: StepId, patch: Record<string, unknown>) => Response
   persist: (patchStep: StepId, patch: Record<string, unknown>, nextStep: StepId | null, isHalted: boolean, haltReason?: string) => void
   retryStep: (step: StepId, generateStep: StepId, patch: Record<string, unknown>) => Response
@@ -115,6 +120,7 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
     devForceNeedsInput,
     extraContext,
     mode,
+    workspaceMode,
     ok,
     persist,
     retryStep,
@@ -147,7 +153,7 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
             ? { priorFrame: run.frame, priorVerdict: run.frameVerdict }
             : undefined
         const userAnswers = formatContextGatherAnswers(run.contextGatherPre, run.contextGatherPreAnswers)
-        const frame = await runFrameGenerate(run.originalQuery, dryRun, repair, userAnswers, masterGuidance)
+        const frame = await runFrameGenerate(run.originalQuery, dryRun, repair, userAnswers, masterGuidance, workspaceMode)
         return ok(step, { frame })
       }
 
@@ -195,7 +201,7 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
 
       case 'perspectives-generate-stances': {
         if (!run.frame || !run.breadthScoping) return missing('frame/breadthScoping')
-        const stances = await runPerspectivesGenerateStances(run.frame, run.breadthScoping, dryRun, extraContext)
+        const stances = await runPerspectivesGenerateStances(run.frame, run.breadthScoping, dryRun, extraContext, workspaceMode)
         return ok(step, { perspectiveStances: stances })
       }
 
@@ -243,6 +249,9 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
             run.perspectiveEvidenceGatherHistory,
             repair,
             extraContext
+            // Not threaded: perspective-level evidence inherits the stance's
+            // own business framing (perspectiveStanceBlock) rather than
+            // carrying a second copy of the same lens.
           )
           const units = collectEvidenceGatherUnits(run.perspectiveStances, strategies)
           return ok(step, {
@@ -401,7 +410,8 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
           run.globalEvidenceGatherHistory,
           repair,
           extraContext,
-          masterGuidance
+          masterGuidance,
+          workspaceMode
         )
         const unit = strategy.needs_user_input
           ? { unitId: 'global', unitLabel: 'Global evidence', reason: strategy.reason, questions: strategy.questions_for_user }
@@ -434,7 +444,8 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
           dryRun,
           repair,
           extraContext,
-          masterGuidance
+          masterGuidance,
+          workspaceMode
         )
         return ok(step, { globalEvidenceDraft: draft })
       }
@@ -553,7 +564,8 @@ export async function dispatchStep(ctx: StepDispatchContext): Promise<Response> 
           dryRun,
           repair,
           extraContext,
-          masterGuidance
+          masterGuidance,
+          workspaceMode
         )
         return ok(step, { implications: packet })
       }

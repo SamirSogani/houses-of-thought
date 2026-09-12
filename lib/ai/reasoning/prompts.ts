@@ -12,7 +12,22 @@
 
 import type { ContextGatherVerdict, FramePacket, PerspectiveBundle, ReviewPanelVerdict, MasterReviewGuidance } from './contracts'
 import type { StandardDef } from './standards'
+import type { WorkspaceMode } from '@/lib/profile/data'
 import { MAX_REGENERATION_ATTEMPTS } from './budget'
+
+// Business mode (decision 021, plans/active/business-mode/02-business-prompts.md):
+// exactly 5 of this file's blocks — frameBlock, perspectiveStanceBlock,
+// globalEvidenceStrategyBlock, globalEvidencePopulateBlock, implicationsBlock —
+// take a workspaceMode parameter and splice in business-flavored framing for
+// 'business', confirmed during implementation as the layers where it actually
+// changes anything; context-gather, breadth-scoping, the other perspective
+// sub-elements, global assumptions, conclusions, and final composition stay
+// mode-independent constants — they inherit whatever framing Frame/Perspectives
+// already established rather than needing their own copy. `workspaceMode`
+// defaults to 'general' everywhere it's threaded, so every existing call site
+// (the admin-only pipeline, which has no per-caller workspace concept and must
+// not be touched — plans/active/reasoning-pipeline/27-house-scoped-pipeline-
+// integration.md) keeps behaving byte-for-byte as before with zero changes.
 
 export const REASONING_PERSONA = `You are one stage in a multi-agent reasoning pipeline inside Houses of Thought's admin tools. The pipeline reasons through a hard question in strict sequence — frame, perspectives, assumptions, evidence, conclusions, implications — modeled on Paul & Elder's Elements of Reasoning. You are doing exactly ONE stage; you do not see, and must not try to redo, any other stage's job.
 
@@ -34,7 +49,18 @@ Set needs_user_input=true only when something essential is genuinely missing or 
 reason is one sentence explaining the call either way.`
 
 // ── Frame ───────────────────────────────────────────────────────────────────
-export const FRAME_BLOCK = `Task: frame the question this pipeline will reason through.
+// Business variant (decision 021): purely additive — the same four fields and
+// the same "don't pad, don't editorialize" discipline, plus one paragraph
+// telling Frame to name a business decision-maker in purpose and cover market/
+// competitive/unit-economics considerations in scope_notes WHEN the question is
+// actually business-shaped. It never forces business framing onto a non-business
+// question — "when this concerns a business or venture" is the model's own call.
+export function frameBlock(workspaceMode: WorkspaceMode): string {
+  const businessNote =
+    workspaceMode === 'business'
+      ? `\n\nWhen this question concerns a business or venture: in purpose, prefer naming the actual business decision-maker (e.g. "a founder," "a product lead") the same way you would "a school's administration" for a school question; in scope_notes, make sure market, competitive, and unit-economics considerations are explicitly covered alongside whatever else is in scope.`
+      : ''
+  return `Task: frame the question this pipeline will reason through.${businessNote}
 
 Produce:
 - core_question: restate the question as concisely and directly as the original phrasing already is — often nearly verbatim. Only reword where the original is genuinely ambiguous or missing something essential — a vague possessive or first-person referent ("our school," "our team") IS this kind of genuine ambiguity: replace it with a concrete generic referent (e.g. "a K-12 school") since the reader has no access to who "our" refers to. Precise means unambiguous, NOT longer or more formal: padding a simple question with qualifiers like "specific institution," "comprehensive policy," or "all forms of X" makes it WORSE, not better, when the original had no such ambiguity to resolve. If the original word choice is a loaded binary (e.g. "ban"), KEEP it for fidelity to what was actually asked — do not soften or euphemize it into a different question — and instead widen the frame in scope_notes (below), not by rewriting core_question.
@@ -43,6 +69,7 @@ Produce:
 - scope_notes: name the actual range of distinct considerations at stake — don't stop at the first few obvious ones; think across practical, social, economic, and procedural angles before settling on a list. If core_question poses a binary (ban/don't, allow/forbid), explicitly state here that the full spectrum of options between the extremes is in scope too, not just the two poles — this is where the framing stays open, not in core_question's wording. Also state what's explicitly out of scope. Aim for under ~1200 characters — thorough, not exhaustive; name the categories of consideration, don't enumerate every instance within each.
 
 Do not answer the question. Do not take a side. Do not editorialize the question into something wordier or more formal-sounding than it needs to be.`
+}
 
 // ── Breadth-scoping ──────────────────────────────────────────────────────────
 export const BREADTH_SCOPING_BLOCK = `Task: decide how many genuinely distinct perspectives this question needs, and name them.
@@ -50,11 +77,21 @@ export const BREADTH_SCOPING_BLOCK = `Task: decide how many genuinely distinct p
 Return n (an integer, minimum 2) and candidate_viewpoint_labels — one short label per perspective (e.g. "The affected students", "The budget holder", "A civil-liberties frame") — each capturing a REALLY different angle, not a rephrasing of another. rationale explains the choice in one or two sentences: why this many, why these angles.`
 
 // ── Perspective bundle (5 parallel generators per bundle) ──────────────────
-export const PERSPECTIVE_STANCE_BLOCK = `Task: argue ONE genuinely distinct perspective on the core question below. You have been assigned a viewpoint label; argue it as if you hold it, honestly and specifically to THIS question.
+// Business variant: only the stance itself gets a nudge (decision 021) — the
+// sub-questions/assumptions/counterargument/evidence sub-elements below all
+// derive from whatever stance_summary/key_claims this produces, so they
+// inherit the framing for free and stay mode-independent constants.
+export function perspectiveStanceBlock(workspaceMode: WorkspaceMode): string {
+  const businessNote =
+    workspaceMode === 'business'
+      ? ` When this question concerns a business or venture and your assigned label names a stakeholder (e.g. a customer, investor, team member, or competitor), ground your stance in what that stakeholder actually cares about — market position, unit economics, risk, or return — not abstract theory.`
+      : ''
+  return `Task: argue ONE genuinely distinct perspective on the core question below. You have been assigned a viewpoint label; argue it as if you hold it, honestly and specifically to THIS question.${businessNote}
 
 Return stance_label (your assigned label, verbatim), stance_summary (2-3 sentences stating your position), and key_claims (1-8 short, specific claims this stance rests on).
 
 Do not hedge toward a "balanced" view — that is the counterargument stage's job, not yours.`
+}
 
 export const PERSPECTIVE_SUBQUESTIONS_BLOCK = `Task: given ONE perspective's stance below, name the sub-questions THIS stance most needs answered to hold up.
 
@@ -95,13 +132,30 @@ export const GLOBAL_ASSUMPTIONS_BLOCK = `Task: given the core question and ALL v
 
 Return question_level_assumptions (1-8), each ONE distinct, testable claim — if a sentence bundles multiple conditions ("X assumes A, and that B, and that C"), split it into separate assumptions unless A/B/C truly stand or fall together. And cross_perspective_notes (1-2 sentences naming WHICH specific perspectives or claims revealed the pattern — a bare assertion that a pattern exists, without pointing to what in the perspectives showed it, is not enough). Do not just repeat an assumption already listed inside one perspective's own assumptions unless naming it at a genuinely more general level.`
 
-export const GLOBAL_EVIDENCE_STRATEGY_BLOCK = `Task: given the core question and ALL vetted perspectives below, decide how to gather evidence relevant to the QUESTION ITSELF (not confined to defending any one stance) — do not write any evidence yet, just the plan.
+// Business variants (decision 021): a preference for market/unit-economics
+// evidence, same shape as Collab's researchBlock (lib/ai/prompts.ts) — never
+// at the expense of the "real, checkable, grounded in what you were given"
+// rules, which stay untouched. Confidence-scoring (below) stays a plain
+// constant — grading what's already written doesn't need a business lens.
+export function globalEvidenceStrategyBlock(workspaceMode: WorkspaceMode): string {
+  const businessNote =
+    workspaceMode === 'business'
+      ? ` This question concerns a business or venture: prefer search queries about market size or dynamics, competitors, unit economics, or customer/user behavior when they'd produce a real, checkable fact — but that's still the exception, not the norm; most claims don't need a search either way.`
+      : ''
+  return `Task: given the core question and ALL vetted perspectives below, decide how to gather evidence relevant to the QUESTION ITSELF (not confined to defending any one stance) — do not write any evidence yet, just the plan.${businessNote}
 
 Return search_queries (up to 3 real web searches — request one only when a specific, checkable fact would turn a hypothetical evidence item into a real, citable one; most claims don't need it, leave empty — that is the normal case, not a fallback), needs_user_input (true only when something only the person asking would know would materially change what evidence applies to this question; not merely because more detail would be nice), questions_for_user (up to 3, only when needs_user_input is true), and reason (one sentence, either way). Search and a question can both apply, or neither. If an "Already asked — do not repeat any of these" section appears in the context below, every question in it is already resolved — never ask the same question again, including a reworded version; only needs_user_input for a genuinely new gap those prior answers didn't cover, and if the same fact is still missing after an unhelpful or skipped answer, proceed with your best stated assumption instead of asking a third time.`
+}
 
-export const GLOBAL_EVIDENCE_POPULATE_BLOCK = `Task: given the core question, ALL vetted perspectives, and whatever real search results or the person's own answer were found, write the actual question-level evidence items.
+export function globalEvidencePopulateBlock(workspaceMode: WorkspaceMode): string {
+  const businessNote =
+    workspaceMode === 'business'
+      ? ` This question concerns a business or venture: prefer items about market dynamics, competitors, unit economics, or customer/user behavior when the real results support them.`
+      : ''
+  return `Task: given the core question, ALL vetted perspectives, and whatever real search results or the person's own answer were found, write the actual question-level evidence items.${businessNote}
 
 Return up to 8 evidence items, each: claim_id and source_ref (the real URL or source name from the results/answer you were given below — quote it directly, don't paraphrase it into something less specific). Ground every item in what you were actually given — if nothing useful came back, return fewer items rather than padding the list.`
+}
 
 export const GLOBAL_EVIDENCE_CONFIDENCE_BLOCK = `Task: given the evidence items below (already written, already sourced), rate how strongly each one actually supports the claim it's attached to.
 
@@ -112,9 +166,19 @@ export const CONCLUSIONS_BLOCK = `Task: given the core question, all vetted pers
 
 Return conclusions (1-4 statements — plural only if the evidence genuinely supports more than one live conclusion, never as a hedge) and supporting_chain (1-8 short statements showing the trail from assumptions and evidence to each conclusion). Do not overreach beyond what the assumptions and evidence actually support.`
 
-export const IMPLICATIONS_BLOCK = `Task: given the core question and the vetted conclusions below, map what follows.
+// Business variant (decision 021): the same field contract, with the phase's
+// own named examples (runway, hiring, fundraising) as what "who/text" should
+// cover when relevant — never a requirement to invent business consequences
+// for a non-business question.
+export function implicationsBlock(workspaceMode: WorkspaceMode): string {
+  const businessNote =
+    workspaceMode === 'business'
+      ? ` This question concerns a business or venture: make sure the spread covers concrete business consequences where relevant — runway, hiring, fundraising, customer or market impact — not just abstract ones.`
+      : ''
+  return `Task: given the core question and the vetted conclusions below, map what follows.${businessNote}
 
 Return 2-8 implications, each: ikind (pos/neg/unc), text, horizon (Near-term/Long-term), who (who bears it) — spread across at least two ikind values; a one-sided list under-explores the consequences. confidence is your overall confidence in this set. caveats_from_degraded_layers lists, in plain language, anything you were told was degraded upstream (empty array if nothing was).`
+}
 
 // ── Final composition (role: synthesis — packaging, not new reasoning) ─────
 export const FINAL_COMPOSITION_BLOCK = `Task: package the vetted reasoning below into a direct answer to the core question, for someone who will read only this, not the full pipeline trace.

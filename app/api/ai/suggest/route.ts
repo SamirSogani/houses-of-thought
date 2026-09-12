@@ -8,10 +8,11 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { completeJSON, AiError } from '@/lib/ai/router'
 import { enforceAiLimit } from '@/lib/ai/limits'
-import { getCallerCapabilities } from '@/lib/auth/account'
-import { PERSONA, SUGGEST_BLOCK } from '@/lib/ai/prompts'
+import { getCallerCapabilities, getCallerWorkspaceMode } from '@/lib/auth/account'
+import { PERSONA, suggestBlock } from '@/lib/ai/prompts'
 import { serializeHouseForPrompt, type HouseForPrompt } from '@/lib/ai/serialize'
 import { FindingsResponseSchema } from '@/lib/ai/findings'
+import { normalizeProjectContext } from '@/lib/projects/data'
 
 // 30 → 60 (2026-08-18, alongside the suggestor lane's Cerebras→DeepInfra
 // swap and its ATTEMPT_TIMEOUT_MS/CHAIN_DEADLINE_MS bump, router-lanes.ts /
@@ -37,6 +38,12 @@ const RequestSchema = z.object({
   // Optional; the house payload already carries aiContext, but a caller may send
   // it separately — the serializer picks up whichever is present.
   aiContext: AiContextSchema.nullish(),
+  // Business mode (decision 021, Phase 3): the owning project's accumulated
+  // context, if any — client-supplied because this route has no DB access to
+  // the house by design (invariant 4). Loosely typed and normalized below
+  // (normalizeProjectContext) rather than schema-validated: this is the
+  // caller's own data, same trust boundary as `house` itself.
+  projectContext: z.unknown().optional(),
 })
 
 export async function POST(req: Request): Promise<Response> {
@@ -65,20 +72,23 @@ export async function POST(req: Request): Promise<Response> {
   if (!parsed.success) {
     return NextResponse.json({ error: 'invalid-request' }, { status: 400 })
   }
-  const { house, step, mode, aiContext } = parsed.data
+  const { house, step, mode, aiContext, projectContext } = parsed.data
 
   // Authoritative posture gate (plan phase 1): a student is pinned to Learn
   // regardless of the mode the client sent, so the co-pilot can never be coaxed
   // into Decide-mode answers. Non-students keep the requested mode.
   const caps = await getCallerCapabilities()
   const effectiveMode = caps.forcedMode ?? mode
+  // Business mode (decision 021): read once from the caller's own profile —
+  // never from the request body.
+  const workspaceMode = await getCallerWorkspaceMode()
 
   const houseForPrompt: HouseForPrompt = {
     ...(house as HouseForPrompt),
     aiContext: aiContext ?? (house as HouseForPrompt).aiContext ?? null,
   }
-  const system = `${PERSONA}\n\n${SUGGEST_BLOCK}`
-  const user = `Mode: ${effectiveMode}\n\n${serializeHouseForPrompt(houseForPrompt, step)}`
+  const system = `${PERSONA}\n\n${suggestBlock(workspaceMode)}`
+  const user = `Mode: ${effectiveMode}\n\n${serializeHouseForPrompt(houseForPrompt, step, normalizeProjectContext(projectContext))}`
 
   try {
     const { findings } = await completeJSON({

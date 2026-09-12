@@ -59,7 +59,12 @@ export function CritiqueSection({ state, dispatch }: { state: State; dispatch: R
       const res = await fetch('/api/ai/critique', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ house: JSON.parse(content) }),
+        body: JSON.stringify({
+          house: JSON.parse(content),
+          // Business mode (decision 021, Phase 3): see useSuggestions.ts's own
+          // comment on this same field.
+          projectContext: state.projectContext,
+        }),
       })
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string }

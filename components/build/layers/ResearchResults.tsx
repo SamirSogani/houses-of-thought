@@ -49,6 +49,9 @@ export function ResearchResults({ state, dispatch }: { state: State; dispatch: R
         body: JSON.stringify({
           house: JSON.parse(serializeContent(state)),
           query: focus.trim() || undefined,
+          // Business mode (decision 021, Phase 3): see useSuggestions.ts's own
+          // comment on this same field.
+          projectContext: state.projectContext,
         }),
       })
       if (!res.ok) {

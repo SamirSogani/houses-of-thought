@@ -8,7 +8,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { log } from '@/lib/log'
-import type { AccountType } from '@/lib/profile/data'
+import type { AccountType, WorkspaceMode } from '@/lib/profile/data'
 import { capabilitiesFor, type Capabilities } from './capabilities'
 
 if (typeof window !== 'undefined') {
@@ -48,4 +48,31 @@ export async function getCallerAccountType(): Promise<AccountType> {
 
 export async function getCallerCapabilities(): Promise<Capabilities> {
   return capabilitiesFor(await getCallerAccountType())
+}
+
+// Business mode (decision 021 §2, plans/active/business-mode/02-business-
+// prompts.md): read ONCE per request from the authenticated caller's own
+// profile — never trust a client-supplied workspace_mode for anything that
+// changes model behavior. Unlike getCallerAccountType, there is no
+// privileged/unprivileged direction to fail closed toward (workspace_mode
+// gates AI framing only, never access — decision 021 §2), so any failure
+// (anonymous caller, missing profile, lookup error) falls back to 'general',
+// the DB column's own default and the least-surprising choice either way.
+export async function getCallerWorkspaceMode(): Promise<WorkspaceMode> {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return 'general'
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('workspace_mode')
+      .eq('id', user.id)
+      .single()
+    if (error || !data?.workspace_mode) return 'general'
+    return data.workspace_mode as WorkspaceMode
+  } catch {
+    return 'general'
+  }
 }

@@ -15,6 +15,7 @@ import {
 } from '@/lib/profile/data'
 import { SectionCard, FieldLabel, TextInput, TextArea } from './primitives'
 import { AccountTypeSelector } from './AccountTypeSelector'
+import { WorkspaceModeToggle } from './WorkspaceModeToggle'
 
 type SaveState = 'saved' | 'saving' | 'error'
 
@@ -140,6 +141,15 @@ export function ProfileForm({ initial, userId }: { initial: ProfileData; userId:
         <SectionCard>
           <FieldLabel label="Account Type" helper="Set when you created your account. To change it, contact us through the contact page." />
           <AccountTypeSelector value={profile.accountType} />
+        </SectionCard>
+
+        {/* Workspace Mode — self-editable (decision 021), unlike Account Type above. */}
+        <SectionCard>
+          <FieldLabel
+            label="Workspace Mode"
+            helper="Business mode adds a Projects section for grouping your houses. You can switch back at any time — nothing is deleted."
+          />
+          <WorkspaceModeToggle value={profile.workspaceMode} onChange={(v) => set('workspaceMode', v)} />
         </SectionCard>
 
         {/* About / Current Project */}
