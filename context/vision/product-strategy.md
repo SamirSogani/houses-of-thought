@@ -46,7 +46,12 @@ Reasoning:
 - Individual learners and decision-makers — served by the free no-login builder;
   top-of-funnel and how teachers evaluate before adopting.
 - Debate / forensics students — high-affinity niche.
-- Professionals/analysts — future expansion, not now.
+- Solo founders / small-business owners — served by **Founder Mode**
+  (decision 021), an opt-in, off-by-default toggle that reframes the
+  builder and reasoning pipeline around business concerns and adds
+  Projects with accumulating context, document upload, and retrieval.
+  Extends this secondary tier; does not change the schools-first wedge above.
+- Professionals/analysts (outside Founder Mode) — future expansion, not now.
 
 ## Feature status
 

@@ -1,8 +1,20 @@
-# Decision 021 — Business/solo-founder mode, Projects, and RAG over user data
+# Decision 021 — Founder Mode: Projects, accumulating context, and RAG over user data
 
 **Date:** 2026-09-11
-**Status:** Planned — not yet implemented. Full spec:
+**Status:** Implemented — Phases 1–5 shipped and merged to main 2026-09-11
+(migrations 0048–0051). Full spec:
 [plans/active/business-mode/](../plans/active/business-mode/README.md).
+
+**Product name: Founder Mode.** Decided 2026-09-11, at the end of the
+implementation session (the working name throughout this decision and the
+plan docs was "business mode" / "business/solo-founder mode" — that's the
+same feature). Internal identifiers are unchanged and NOT renamed by this
+note: `workspace_mode`'s `'general'`/`'business'` enum values, the
+`plans/active/business-mode/` folder, and this file's own filename all
+still say "business." "Founder Mode" is the name to use in UI copy and any
+new docs going forward; the current UI (`WorkspaceModeToggle.tsx`) still
+reads "Business"/"General" and hasn't been updated to match — a real,
+separate follow-up if wanted, not done here.
 
 ## Context
 
