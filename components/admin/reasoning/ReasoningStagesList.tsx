@@ -93,6 +93,11 @@ export interface RunState {
   // (StepResponse.patch: Partial<RunState>), just not nameable in TS before.
   masterReview?: { forStep: StepId; guidance: MasterReviewGuidance } | null
   consoleGuidance?: string | null
+  // Business mode (decision 021, Phase 5) — see route-schema.ts's RunState
+  // for the full rationale. Present at runtime (route.ts's withRagCache)
+  // even though only the house-scoped route ever sets it; always [] for the
+  // admin page and undefined until the run's first RAG-eligible step.
+  ragSources?: { sourceType: 'document' | 'house' | 'project_context'; label: string }[] | null
 }
 
 function stepDone(run: RunState, stepId: StepId): boolean {

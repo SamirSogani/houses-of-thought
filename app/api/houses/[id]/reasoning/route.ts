@@ -39,7 +39,7 @@ import { AiError } from '@/lib/ai/router'
 import { createClient } from '@/lib/supabase/server'
 import { getCallerCapabilities, getCallerWorkspaceMode } from '@/lib/auth/account'
 import { getProject, formatProjectContextLines } from '@/lib/projects/data'
-import { retrieveProjectChunks, formatRagChunksForPrompt } from '@/lib/ai/rag'
+import { retrieveProjectChunks, formatRagChunksForPrompt, type RagSourceType } from '@/lib/ai/rag'
 import { log } from '@/lib/log'
 import { type StepId, type PipelineMode, nextStepForMode, isReviewStep, STEP_FAILURE_MODE } from '@/lib/ai/reasoning/steps'
 import { MAX_N_PHASE1 } from '@/lib/ai/reasoning/budget'
@@ -307,8 +307,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // exact cost this exists to avoid.
   let ragText = run.ragText
   const ragTextFresh = ragText === undefined
+  // Companion to ragText — see route-schema.ts's own comment on ragSources.
+  // Computed in lockstep with ragText (same freshness flag, same chunks),
+  // never recomputed independently.
+  let ragSources: { sourceType: RagSourceType; label: string }[] = run.ragSources ?? []
   if (ragText === undefined) {
     ragText = null
+    ragSources = []
     // Gated on business mode ONLY: a general-mode caller incurs ZERO
     // embedding-generation cost here, full stop, regardless of whether the
     // house has a project (the plan doc's own explicit manual-verification
@@ -321,6 +326,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         // never merged into projectContextText.
         const formatted = formatRagChunksForPrompt(chunks)
         if (formatted) ragText = formatted
+        // Same doc-id → filename lookup as app/api/ai/interview/route.ts's
+        // own ragSources construction — kept in sync deliberately, not
+        // factored out, since each caller's chunk source is independent.
+        const docIds = [...new Set(chunks.filter((c) => c.sourceType === 'document' && c.sourceId).map((c) => c.sourceId as string))]
+        const filenameById = new Map<string, string>()
+        if (docIds.length > 0) {
+          const { data: docs } = await supabase.from('project_documents').select('id, filename').in('id', docIds)
+          for (const d of (docs ?? []) as { id: string; filename: string }[]) filenameById.set(d.id, d.filename)
+        }
+        ragSources = chunks.map((c) => ({
+          sourceType: c.sourceType,
+          label: c.sourceType === 'document' && c.sourceId ? (filenameById.get(c.sourceId) ?? 'a document') : 'your project notes',
+        }))
       } catch (err) {
         log.error('houses/reasoning', 'RAG retrieval failed', { error: (err as Error)?.message })
       }
@@ -360,7 +378,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // run.ragText already set and skips recomputing it. Project context is
   // NOT part of this — it's read fresh every step above, never cached.
   function withRagCache(patch: Record<string, unknown>): Record<string, unknown> {
-    return ragTextFresh ? { ...patch, ragText } : patch
+    return ragTextFresh ? { ...patch, ragText, ragSources } : patch
   }
 
   function ok(step: StepId, patch: Record<string, unknown>): Response {

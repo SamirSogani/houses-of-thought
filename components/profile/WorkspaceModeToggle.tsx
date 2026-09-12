@@ -18,7 +18,7 @@ const modes: { key: WorkspaceMode; name: string; desc: string }[] = [
   {
     key: 'business',
     name: 'Business',
-    desc: 'Adds a Projects section for grouping houses by project. Business-framed AI guidance is coming in a later update.',
+    desc: 'Adds a Projects section for grouping houses by project, business-framed AI guidance, and RAG over your own project material.',
   },
 ]
 
