@@ -164,16 +164,49 @@ export function estimateTokens(text: string): number {
 // net, not a reason to grant strict schema mode without real confirmation.
 //
 // Qwen/Qwen3-235B-A22B-Instruct-2507 (TARGETS.deepinfra, 2026-08-13 swap from
-// Llama-3.3-70B) is likewise deliberately NOT included here: its DeepInfra
-// model page shows a "Supports" badge for JSON, but this codebase already
-// learned that badge alone isn't a reliable signal — Llama-3.3-70B carried
-// the identical badge and still failed. Left off pending real per-model
-// confirmation the same way every model except DeepSeek-V3 is — this is a
-// deliberate omission, not an oversight a future reader should "fix" without
-// first getting that confirmation.
+// Llama-3.3-70B) was likewise deliberately NOT included at the time: its
+// DeepInfra model page showed a "Supports" badge for JSON, but this codebase
+// had already learned that badge alone isn't a reliable signal —
+// Llama-3.3-70B carried the identical badge and still failed. Left off
+// pending real per-model confirmation the same way every model except
+// DeepSeek-V3 was — a deliberate omission, not an oversight. UPDATE
+// 2026-09-12: docs.deepinfra.com/chat/structured-outputs, re-checked, now
+// explicitly names this model (see the comment below) — it's included now
+// on that real confirmation, not the badge this note originally distrusted.
+//
+// Qwen/Qwen3-235B-A22B-Instruct-2507 (TARGETS.deepinfra, current default) IS
+// now included, unlike when it was first tried above — docs.deepinfra.com/
+// chat/structured-outputs was re-checked 2026-09-12 and now explicitly names
+// it (alongside Qwen3-Coder-480B, DeepSeek-V3, and DeepSeek-V3.1) — a real
+// documented confirmation, not a "Supports" badge, so this is not an
+// exception to the rule above; the rule's own condition (explicit DeepInfra
+// docs mention) is simply now satisfied.
+//
+// Qwen/Qwen3.8-2.4T-A95B (TARGETS.deepinfraLarge, router-config.ts,
+// 2026-09-12 per-step tiering) IS the actual break from the "badge alone is
+// not enough" rule — it isn't on DeepInfra's explicit list above. Samir's
+// own research (not this codebase's own real-verification) found it
+// handles strict json_schema on DeepInfra meaningfully better than
+// Qwen3-235B despite that. Still worth this target's usual first-real-run
+// scrutiny (router-config.ts's own comment on this target) to confirm it
+// holds up the way Llama-3.3-70B's identical badge didn't.
+//
+// Qwen/Qwen3.8-27B was granted the same way, same day, as TARGETS.
+// deepinfraCritic's first choice — then real-verification (not a guess)
+// found it empty-output-failed on this exact role (standard_verdict, 800
+// tokens) badly enough to halt a run, and it was replaced by DeepSeek-V3
+// (already matched by the `deepseek-v3` substring below, no separate entry
+// needed — see TARGETS.deepinfraCritic's own comment for the failure and
+// the swap). Deliberately NOT left in this matcher — it's unused now, and
+// a stale grant for a model nothing routes to is confusion, not caution.
 export function supportsJsonSchema(model: string): boolean {
   const m = model.toLowerCase()
-  return m.includes('gpt-oss') || m.includes('deepseek-v3')
+  return (
+    m.includes('gpt-oss') ||
+    m.includes('deepseek-v3') ||
+    m.includes('qwen3-235b') ||
+    m.includes('qwen3.8-2.4t')
+  )
 }
 
 // reasoning_effort's vocabulary is per-model and a mismatch is a hard 400 (which

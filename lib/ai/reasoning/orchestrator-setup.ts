@@ -69,7 +69,20 @@ export async function runContextGather(
     schema: ContextGatherModelSchema,
     schemaName: 'context_gather_verdict',
     effort: 'low',
-    maxTokens: 400,
+    // Blanket bump, every maxTokens in the reasoning pipeline, 2026-09-12
+    // (Samir): the per-call tuned values below (this one was 400) were each
+    // individually right-sized for their own schema, but the large/critic
+    // tiers' "thinking" models (orchestrator-global.ts's global-assumptions-
+    // generate, orchestrator-panel.ts's standard_verdict) proved that hidden
+    // reasoning tokens can burn a tight budget before any JSON is written —
+    // confirmed live this session on two separate calls. Rather than
+    // right-size each of the ~19 reasoning-pipeline call sites individually
+    // against an unknown per-model reasoning-token appetite, Samir opted for
+    // one uniform 8000 everywhere in this lane: generous enough that no call
+    // should ever hit this wall again, on any model this lane might run.
+    // Real-verified (2026-09-12, full test house) after review-panel calls
+    // needed ~7400 tokens against an 800 cap — see orchestrator-panel.ts.
+    maxTokens: 8000,
   })
   // Search enriches the question shown to the user — it never substitutes for
   // asking (Samir's call): even a fully-answered questions_for_user still
@@ -139,8 +152,9 @@ export async function runFrameGenerate(
     // "response was not valid JSON" on BOTH the raw attempt and completeJSON's
     // own retry) — up to 6 definitions plus the 1400-char scope_notes
     // (contracts.ts) can outgrow 1200 output tokens, especially when the
-    // model is also addressing repair feedback.
-    maxTokens: 2000,
+    // model is also addressing repair feedback. Raised again, 2000 → 8000,
+    // 2026-09-12 — blanket bump, see runContextGather above for why.
+    maxTokens: 8000,
   })
   return { ...modelOut, original_query: originalQuery }
 }
@@ -189,7 +203,7 @@ export async function runBreadthScoping(
     schema: BreadthScopingPacketSchema,
     schemaName: 'breadth_scoping_packet',
     effort: 'low',
-    maxTokens: 500,
+    maxTokens: 8000, // blanket bump, 2026-09-12 — see runContextGather above
   })
   const n = clampN(Math.min(modelOut.n, capN))
   return { ...modelOut, n, candidate_viewpoint_labels: fitLabelsToN(modelOut.candidate_viewpoint_labels, n) }

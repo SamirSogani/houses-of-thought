@@ -87,6 +87,10 @@ export async function runPerspectivesGenerateStances(
       }
       const modelOut = await completeJSON({
         role: 'swarm',
+        // Samir's 2026-09-12 per-step tiering (router-config.ts's
+        // TARGETS.deepinfraLarge) — perspectives generation always runs on
+        // the largest model.
+        swarmTier: 'large',
         system: `${REASONING_PERSONA}\n\n${perspectiveStanceBlock(workspaceMode)}`,
         user: `${frameText}\n\nYour assigned viewpoint label: ${label}`,
         schema: StanceModelSchema,
@@ -96,7 +100,16 @@ export async function runPerspectivesGenerateStances(
         // first-pass call, so always 'medium'. See allowHighReasoning
         // comments below for why 'high' is reserved for repair specifically.
         effort: 'medium',
-        maxTokens: 1000,
+        // Blanket bump, every maxTokens in the reasoning pipeline, 2026-09-12
+        // (Samir): the large/critic tiers' "thinking" models proved hidden
+        // reasoning tokens can burn a tight per-call budget before any JSON
+        // is written (orchestrator-global.ts's global-assumptions-generate,
+        // orchestrator-panel.ts's standard_verdict, both real-verified this
+        // session) — one uniform 8000 everywhere in this lane replaces the
+        // old per-schema tuned values (this one was 1000) rather than
+        // guessing a safe number per call against an unknown per-model
+        // reasoning-token appetite.
+        maxTokens: 8000,
       })
       return { perspective_id, stance_label: label, ...modelOut }
     })
@@ -229,40 +242,46 @@ export async function runPerspectivesGenerateDetails(
         stagger(0).then(() =>
           completeJSON({
             role: 'swarm',
+            swarmTier: 'large', // Samir's 2026-09-12 tiering — see runPerspectivesGenerateStances above
             system: `${REASONING_PERSONA}\n\n${PERSPECTIVE_SUBQUESTIONS_BLOCK}`,
             user: appendRegenerationFeedback(stanceText, feedback),
             schema: PerspectiveBundleSchema.pick({ sub_questions: true }),
             schemaName: 'perspective_subquestions',
             effort: genEffort,
             allowHighReasoning: !!feedback,
-            // +REPAIR_TOKEN_HEADROOM on repair only — see budget.ts for why.
-            maxTokens: feedback ? 1100 + REPAIR_TOKEN_HEADROOM : 1100,
+            // Blanket bump, 2026-09-12 (was 1100) — see runPerspectivesGenerateStances
+            // above. +REPAIR_TOKEN_HEADROOM on repair only — see budget.ts for why.
+            maxTokens: feedback ? 8000 + REPAIR_TOKEN_HEADROOM : 8000,
           })
         ),
         stagger(1).then(() =>
           completeJSON({
             role: 'swarm',
+            swarmTier: 'large', // Samir's 2026-09-12 tiering — see runPerspectivesGenerateStances above
             system: `${REASONING_PERSONA}\n\n${PERSPECTIVE_ASSUMPTIONS_BLOCK}`,
             user: appendRegenerationFeedback(stanceText, feedback),
             schema: PerspectiveBundleSchema.pick({ assumptions: true }),
             schemaName: 'perspective_assumptions',
             effort: genEffort,
             allowHighReasoning: !!feedback,
-            // +REPAIR_TOKEN_HEADROOM on repair only — see budget.ts for why.
-            maxTokens: feedback ? 1200 + REPAIR_TOKEN_HEADROOM : 1200,
+            // Blanket bump, 2026-09-12 (was 1200) — see runPerspectivesGenerateStances
+            // above. +REPAIR_TOKEN_HEADROOM on repair only — see budget.ts for why.
+            maxTokens: feedback ? 8000 + REPAIR_TOKEN_HEADROOM : 8000,
           })
         ),
         stagger(2).then(() =>
           completeJSON({
             role: 'swarm',
+            swarmTier: 'large', // Samir's 2026-09-12 tiering — see runPerspectivesGenerateStances above
             system: `${REASONING_PERSONA}\n\n${PERSPECTIVE_COUNTERARGUMENT_BLOCK}`,
             user: appendRegenerationFeedback(stanceText, feedback),
             schema: PerspectiveBundleSchema.shape.counterargument.omit({ authored_by_perspective_id: true }),
             schemaName: 'perspective_counterargument',
             effort: genEffort,
             allowHighReasoning: !!feedback,
-            // +REPAIR_TOKEN_HEADROOM on repair only — see budget.ts for why.
-            maxTokens: feedback ? 1600 + REPAIR_TOKEN_HEADROOM : 1600,
+            // Blanket bump, 2026-09-12 (was 1600) — see runPerspectivesGenerateStances
+            // above. +REPAIR_TOKEN_HEADROOM on repair only — see budget.ts for why.
+            maxTokens: feedback ? 8000 + REPAIR_TOKEN_HEADROOM : 8000,
           })
         ),
       ])
@@ -359,7 +378,7 @@ export async function runPerspectivesEvidenceStrategy(
       // scoping) — 'medium' always, no repair-mode 'high' bump; there's no
       // real content to "revise" here the way populate/confidence have.
       effort: 'medium',
-      maxTokens: 500,
+      maxTokens: 8000, // blanket bump, 2026-09-12 (was 500) — see runPerspectivesGenerateStances above
     })
   })
   if ('failures' in result) throw new PerspectivesGenerateError(result.failures)
@@ -411,8 +430,10 @@ export async function runPerspectivesEvidencePopulate(
       allowHighReasoning: !!feedback,
       // 2400 (2026-08-10 finding, carried over from the old single-call
       // version): gpt-oss-20b's evidence items (citations: study names,
-      // years, journals) run long. +REPAIR_TOKEN_HEADROOM on repair only.
-      maxTokens: feedback ? 2400 + REPAIR_TOKEN_HEADROOM : 2400,
+      // years, journals) run long. Blanket-bumped to 8000, 2026-09-12 — see
+      // runPerspectivesGenerateStances above. +REPAIR_TOKEN_HEADROOM on
+      // repair only.
+      maxTokens: feedback ? 8000 + REPAIR_TOKEN_HEADROOM : 8000,
     })
     return out.evidence
   })
@@ -458,7 +479,8 @@ export async function runPerspectivesEvidenceConfidence(
       schemaName: 'perspective_evidence_confidence',
       effort: feedback ? 'high' : 'medium',
       allowHighReasoning: !!feedback,
-      maxTokens: feedback ? 800 + REPAIR_TOKEN_HEADROOM : 800,
+      // blanket bump, 2026-09-12 (was 800) — see runPerspectivesGenerateStances above
+      maxTokens: feedback ? 8000 + REPAIR_TOKEN_HEADROOM : 8000,
     })
     const byId = new Map(out.confidence.map((c) => [c.claim_id, c.confidence]))
     return draft.map((d) => {

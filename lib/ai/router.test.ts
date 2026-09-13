@@ -40,6 +40,8 @@ for (const k of KEY_ENVS) process.env[k] = 'test-key'
 const MODELS = {
   mistral: 'ministral-8b-latest',
   deepinfra: TARGETS.deepinfra.model,
+  deepinfraLarge: TARGETS.deepinfraLarge.model,
+  deepinfraCritic: TARGETS.deepinfraCritic.model,
   groqQwen: 'qwen/qwen3.6-27b',
   groqOss: 'openai/gpt-oss-20b',
   gemini: 'gemini-2.5-flash',
@@ -81,6 +83,9 @@ function ask(
     // shared default so those tests stay untouched.
     schema?: z.ZodType<unknown>
     schemaName?: string
+    // Per-step DeepInfra tier within role 'swarm' (router-lanes.ts's
+    // SwarmTier) — ignored by every other role, same as production.
+    swarmTier?: 'draft' | 'large' | 'critic'
   } = {}
 ) {
   return completeJSON({
@@ -91,6 +96,7 @@ function ask(
     schemaName: overrides.schemaName ?? 'test',
     effort: overrides.effort ?? 'low',
     allowHighReasoning: overrides.allowHighReasoning,
+    swarmTier: overrides.swarmTier,
     maxTokens: 100,
   })
 }
@@ -229,6 +235,35 @@ describe('swarm and synthesis lanes (reasoning pipeline only)', () => {
     script = () => OK
     await expect(ask('synthesis')).resolves.toEqual({ ok: true })
     expect(calls.map((c) => c.provider)).toEqual(['deepinfra'])
+  })
+})
+
+describe('swarm per-step model tiers (2026-09-12)', () => {
+  it('defaults to the shared "draft" model when swarmTier is omitted', async () => {
+    await expect(ask('swarm')).resolves.toEqual({ ok: true })
+    expect(calls[0].model).toBe(MODELS.deepinfra)
+  })
+
+  it("'large' tier (perspectives/global-assumptions generation) uses the large model", async () => {
+    await expect(ask('swarm', { swarmTier: 'large' })).resolves.toEqual({ ok: true })
+    expect(calls[0].model).toBe(MODELS.deepinfraLarge)
+  })
+
+  it("'critic' tier (review panels/master review) uses the critic model", async () => {
+    await expect(ask('swarm', { swarmTier: 'critic' })).resolves.toEqual({ ok: true })
+    expect(calls[0].model).toBe(MODELS.deepinfraCritic)
+  })
+
+  it('each tier still retries the SAME target 3x on failure, never cascades to another tier', async () => {
+    let n = 0
+    script = () => (n++ < 2 ? (() => { throw makeErr(429, 'rate limit') })() : OK)
+    await expect(ask('swarm', { swarmTier: 'large' })).resolves.toEqual({ ok: true })
+    expect(calls.map((c) => c.model)).toEqual([MODELS.deepinfraLarge, MODELS.deepinfraLarge, MODELS.deepinfraLarge])
+  })
+
+  it('synthesis (final-composition) ignores swarmTier — always the shared draft model', async () => {
+    await expect(ask('synthesis', { swarmTier: 'large' })).resolves.toEqual({ ok: true })
+    expect(calls[0].model).toBe(MODELS.deepinfra)
   })
 })
 
@@ -533,8 +568,12 @@ describe('json shape guardrail and defensive unwrap', () => {
   })
 
   it('json_object-mode models get the schema described in-prompt instead (no guardrail line needed)', async () => {
-    await ask('coach') // mistral primary — supportsJsonSchema() = false
-    const systemContent = (calls[0].params.messages as { content: string }[])[0].content
+    // deepinfra is coach's primary and now schema-granted (Qwen3.8-2.4T-A95B)
+    // — fail it so mistral (never schema-granted) is the model actually
+    // inspected here.
+    script = (m) => (m === MODELS.deepinfra ? (() => { throw makeErr(429, 'rate limit') })() : OK)
+    await ask('coach')
+    const systemContent = (calls[1].params.messages as { content: string }[])[0].content
     expect(systemContent).toContain('Respond with a single JSON object and nothing else')
     expect(systemContent).not.toContain('do not wrap it in an array')
   })

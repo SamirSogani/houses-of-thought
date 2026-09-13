@@ -69,6 +69,10 @@ const CTX = {
   // deepinfra.com/deepseek-ai/DeepSeek-V4-Flash-0731) — by far the largest
   // window this target has run. 128K remains the tightest ceiling across all
   // five models this target has now run; still no change needed here.
+  // Qwen/Qwen3.8-2.4T-A95B (2026-09-12, current default, see
+  // TARGETS.deepinfra's own comment) is 262,144 natively — same figure as
+  // Qwen3-235B above, not smaller — so 128K remains the tightest ceiling
+  // across all six models this target has now run; still no change needed.
   deepinfra: Number(process.env.DEEPINFRA_CONTEXT ?? 128_000),
   groq: Number(process.env.GROQ_CONTEXT ?? 128_000),
   gemini: Number(process.env.GEMINI_CONTEXT ?? 1_000_000),
@@ -98,13 +102,52 @@ export const TARGETS = {
   // DeepInfra override var below stays DEEPINFRA_* with no underscore, since
   // only the literal secret name needed to match what's really configured.)
   //
-  // Active default: 'deepseek-ai/DeepSeek-V4-Flash-0731' (2026-08-14, Samir's
-  // call, swapped from Qwen3-235B-A22B-Instruct-2507 — NOT because Qwen
-  // failed real verification like the models before it did; the 2026-08-13
-  // swap-in run passed 22/22 real calls. This swap is exploratory: DeepSeek
-  // released V4-Flash the same week (284B total / 13B active MoE, 1M-token
-  // context, tuned for "agentic" workloads) and Samir wants it real-verified
-  // on this lane before deciding between it and Qwen.
+  // Active default: 'Qwen/Qwen3-235B-A22B-Instruct-2507' — used directly
+  // here for coach/critic/suggestor/feedback/console, AND as the reasoning
+  // pipeline's swarm/synthesis DEFAULT ("draft" tier, router-lanes.ts's
+  // swarmAttempts()/synthesisAttempts()) for every pipeline step except the
+  // two below.
+  //
+  // Per-step tiering added 2026-09-12 (Samir's call, own research — not
+  // this codebase's usual real-verification-first discipline, so treat
+  // "confirmed live" as still outstanding on TARGETS.deepinfraLarge below;
+  // TARGETS.deepinfraCritic's own model choice WAS then real-verified,
+  // same day — see that target's own comment for the Qwen3.8-27B failure
+  // and the DeepSeek-V3 replacement):
+  // TARGETS.deepinfraLarge (Qwen3.8-2.4T-A95B) for perspectives-generate-
+  // stances/-details and global-assumptions-generate ONLY, TARGETS.
+  // deepinfraCritic (deepseek-ai/DeepSeek-V3) for every review-panel/
+  // master-review call — see those two targets' own comments above and
+  // swarmAttempts()'s `tier` param (router-lanes.ts) for the actual
+  // dispatch mechanism. Two reasons Samir gave for the larger (2.4T) model
+  // specifically: (1) meaningfully better strict `json_schema` handling on
+  // DeepInfra than Qwen3-235B, despite Qwen3.8-2.4T not being on
+  // docs.deepinfra.com/chat/structured-outputs' explicit list the way
+  // Qwen3-235B and DeepSeek-V3 both are (see supportsJsonSchema() below —
+  // the 2.4T grant is the one deliberate break from this file's own
+  // badge-is-not-enough precedent); (2) it exposes its reasoning trace via
+  // `stream: true` rather than mixing it into `content` — this codebase
+  // doesn't stream (callProvider, router.ts, awaits one ChatCompletion), so
+  // that only matters if a non-streamed call also keeps reasoning out of
+  // `content` on its own, unconfirmed here. (The critic tier's own model
+  // choice is unrelated to either reason — see TARGETS.deepinfraCritic's
+  // own comment above for why DeepSeek-V3 is there instead.)
+  //
+  // This same slot briefly held 'Qwen/Qwen3.8-2.4T-A95B' as the SHARED
+  // default for every role (not just the two steps above) for a few hours
+  // this same session, before Samir corrected that to the narrower, tiered
+  // scope actually described here — worth knowing if this history reads as
+  // churn, because it was: both changes landed the same day.
+  //
+  // ── deepseek-ai/DeepSeek-V4-Flash-0731 (kept here for history, was active
+  // default 2026-08-14, production-rolled-back 2026-08-15, hardcoded
+  // default finally replaced 2026-09-12) — swapped from Qwen3-235B-A22B-
+  // Instruct-2507 — NOT because Qwen failed real verification like the
+  // models before it did; the 2026-08-13 swap-in run passed 22/22 real
+  // calls. This swap was exploratory: DeepSeek released V4-Flash the same
+  // week (284B total / 13B active MoE, 1M-token context, tuned for
+  // "agentic" workloads) and Samir wanted it real-verified on this lane
+  // before deciding between it and Qwen.
   //
   // Confirmed live before this swap, same discipline as every prior one:
   // fetched https://deepinfra.com/deepseek-ai/DeepSeek-V4-Flash-0731 directly
@@ -131,6 +174,13 @@ export const TARGETS = {
   // path, backed by the same JSON_SHAPE_GUARDRAIL + stripMarkdownFence
   // (router.ts) net every unconfirmed model on this target gets.
   //
+  // Never had an incident that specifically retired IT — production simply
+  // rolled back to Qwen3-235B the next day (below) on a stronger-evidence
+  // basis (see that history entry), and the hardcoded default here didn't
+  // catch up until 2026-09-12, a month later, as an unrelated side effect
+  // of the tiering work above. Its own known risk and real-verification
+  // results, preserved for history:
+  //
   // ⚠ KNOWN RISK, flagged before real-verification rather than discovered by
   // it: unlike DeepSeek-V3 and Qwen3-235B — both explicitly chosen FOR having
   // no hidden reasoning channel, to structurally rule out gpt-oss-20b's
@@ -153,8 +203,13 @@ export const TARGETS = {
   // DeepSeek-V3's 8+ minutes for the Perspectives layer alone. The hidden-
   // reasoning-channel risk above did NOT materialize this run — one clean
   // run is not proof it never will (gpt-oss-20b's own failure was
-  // intermittent, not every-call), so this is still worth watching on early
-  // real traffic, same discipline as every model on this target gets.
+  // intermittent, not every-call). Real production traffic later found a
+  // 33% permanent-failure rate under 9-way concurrency (see
+  // plans/active/reasoning-pipeline/model-evaluation/), which is exactly the
+  // "one clean run is not proof" case this comment already warned about —
+  // production was rolled back to Qwen3-235B 2026-08-15 (env var only, no
+  // code change; this hardcoded default drifted from production as a result
+  // until this 2026-09-12 swap).
   //
   // ── Qwen/Qwen3-235B-A22B-Instruct-2507 (kept here for history) — swapped from
   // 'meta-llama/Llama-3.3-70B-Instruct-Turbo' (2026-08-13, same live
@@ -306,7 +361,67 @@ export const TARGETS = {
   // DEEPINFRA_MODEL env) to revert or try something else again.
   deepinfra: {
     provider: 'deepinfra',
-    model: process.env.DEEPINFRA_MODEL ?? 'deepseek-ai/DeepSeek-V4-Flash-0731',
+    model: process.env.DEEPINFRA_MODEL ?? 'Qwen/Qwen3-235B-A22B-Instruct-2507',
+    keyEnv: process.env.DEEPINFRA_KEY_ENV ?? 'DEEP_INFRA_API_KEY',
+    contextWindow: CTX.deepinfra,
+  },
+  // Reasoning-pipeline-only, per-step model tiers (2026-09-12, Samir's call,
+  // own research — see TARGETS.deepinfra's own comment above for the full
+  // "why 3 models" rationale). Same account/key/context as TARGETS.deepinfra
+  // above — only the model id differs, so both new targets reuse its keyEnv
+  // and CTX.deepinfra rather than minting their own env-var names for those.
+  //
+  // 'large': perspectives-generate-stances/-details and global-assumptions-
+  // generate ONLY (router-lanes.ts's swarmAttempts(), tier param) — the two
+  // layers Samir specifically wants the 2.4T model reasoning about. Every
+  // other swarm-role step (and synthesis) stays on TARGETS.deepinfra above —
+  // NOT this target, despite the name "deepinfraLarge" possibly suggesting
+  // otherwise; the name is about the MODEL'S size, not usage breadth.
+  deepinfraLarge: {
+    provider: 'deepinfra',
+    model: process.env.DEEPINFRA_LARGE_MODEL ?? 'Qwen/Qwen3.8-2.4T-A95B',
+    keyEnv: process.env.DEEPINFRA_KEY_ENV ?? 'DEEP_INFRA_API_KEY',
+    contextWindow: CTX.deepinfra,
+  },
+  // 'critic': every review-panel standard-verdict call AND master-review
+  // (orchestrator-panel.ts's runReviewPanel/runMasterReview — the ONLY two
+  // functions any review step ever calls through, per that file's own
+  // header) — every one of the 6 review gates plus master-review escalation
+  // routes through here, nothing else does.
+  //
+  // Active default: 'deepseek-ai/DeepSeek-V3' (2026-09-12, Samir's call,
+  // replacing 'Qwen/Qwen3.8-27B' — real-verified failure, not a guess).
+  // Qwen3.8-27B's very first real test on this target halted the pipeline
+  // at perspectives-review: `standard_verdict` calls (effort 'low',
+  // maxTokens 800) repeatedly came back EMPTY with finishReason "length" —
+  // the model burning its entire 800-token budget on hidden reasoning
+  // before ever writing the verdict JSON, the exact failure shape that
+  // broke gpt-oss-20b earlier in this codebase's history. Tolerated once at
+  // frame-review (2 failures, still passed 9/9); fatal at perspectives-
+  // review (more standard×perspective combinations, more failures than the
+  // retry budget absorbs), ending in a 502 and a halted run. ~21 identical
+  // "upstream empty output" errors across both gates it reached — this is
+  // the model's actual token behavior on this task, not a one-off blip.
+  //
+  // DeepSeek-V3 is this file's single most evidence-backed choice for a
+  // small, high-volume classification-shaped call: (1) STRUCTURALLY
+  // non-thinking (plain model, no hidden reasoning channel at all — not
+  // "believed" non-thinking the way Qwen3-235B's own page claims, this one
+  // has no mechanism to burn a token budget on invisible thinking in the
+  // first place); (2) the one model on this whole target with CONFIRMED
+  // strict `json_schema` support on DeepInfra (docs.deepinfra.com/chat/
+  // structured-outputs); (3) already real-verified clean doing the HARDER
+  // job on this exact codebase (full generation, not just an 800-token
+  // verdict) — see TARGETS.deepinfra's own history below: Frame 9/9, both
+  // Perspectives bundles 9/9, zero regenerations, zero empty-output. Its
+  // one known weakness there — slow on BIG generation (2.3 min for a full
+  // Frame) — is a different load profile than a single 800-token pass/fail
+  // verdict; unconfirmed whether that weakness transfers here, worth
+  // watching on the first few real critic-tier runs the same way every
+  // other swap on this target gets watched.
+  deepinfraCritic: {
+    provider: 'deepinfra',
+    model: process.env.DEEPINFRA_CRITIC_MODEL ?? 'deepseek-ai/DeepSeek-V3',
     keyEnv: process.env.DEEPINFRA_KEY_ENV ?? 'DEEP_INFRA_API_KEY',
     contextWindow: CTX.deepinfra,
   },

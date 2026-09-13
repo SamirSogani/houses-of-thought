@@ -94,6 +94,11 @@ export async function runGlobalAssumptionsGenerate(
   const isRepair = !!repair || !!masterGuidance
   return completeJSON({
     role: 'swarm',
+    // Samir's 2026-09-12 per-step tiering (router-config.ts's
+    // TARGETS.deepinfraLarge) — global assumptions generation always runs
+    // on the largest model, same as perspectives generation
+    // (orchestrator-perspectives.ts).
+    swarmTier: 'large',
     system: `${REASONING_PERSONA}\n\n${GLOBAL_ASSUMPTIONS_BLOCK}`,
     user: masterGuidance
       ? appendMasterGuidance(context, masterGuidance.priorArtifact, masterGuidance.guidance)
@@ -105,8 +110,17 @@ export async function runGlobalAssumptionsGenerate(
     // reasoningEffortFor's allowHighReasoning (router-shared.ts).
     effort: isRepair ? 'high' : 'medium',
     allowHighReasoning: isRepair,
-    // +REPAIR_TOKEN_HEADROOM on repair only — see budget.ts for why.
-    maxTokens: isRepair ? 900 + REPAIR_TOKEN_HEADROOM : 900,
+    // 900 → 8000 (2026-09-12, Samir): the large tier's first real test
+    // (subagent-driven, this session) halted here 3x — `upstream empty
+    // output`, finishReason "length" — the exact failure shape gpt-oss-20b
+    // and Qwen3.8-27B (critic tier) both hit: hidden reasoning tokens
+    // burning the whole budget before any JSON. Unlike those two, this
+    // call isn't being swapped off the model yet — try headroom first,
+    // since Qwen3.8-2.4T-A95B was chosen specifically for its stronger
+    // schema/JSON behavior and Samir wants that kept if a bigger budget
+    // alone resolves it. +REPAIR_TOKEN_HEADROOM on repair only, same as
+    // every other call — see budget.ts for why.
+    maxTokens: isRepair ? 8000 + REPAIR_TOKEN_HEADROOM : 8000,
   })
 }
 
@@ -184,7 +198,7 @@ export async function runGlobalEvidenceStrategy(
     // scoping) — 'medium' always, no repair-mode 'high' bump; mirrors
     // orchestrator-perspectives.ts's runPerspectivesEvidenceStrategy.
     effort: 'medium',
-    maxTokens: 500,
+    maxTokens: 8000, // blanket bump, 2026-09-12 (was 500) — see runGlobalAssumptionsGenerate above
   })
 }
 
@@ -228,9 +242,10 @@ export async function runGlobalEvidencePopulate(
     effort: isRepair ? 'high' : 'medium',
     allowHighReasoning: isRepair,
     // 2400 (carried over from the old single-call version's 2026-08-10
-    // finding): gpt-oss-20b's evidence items (citations) run long.
+    // finding): gpt-oss-20b's evidence items (citations) run long. Blanket-
+    // bumped to 8000, 2026-09-12 — see runGlobalAssumptionsGenerate above.
     // +REPAIR_TOKEN_HEADROOM on repair only — see budget.ts for why.
-    maxTokens: isRepair ? 2400 + REPAIR_TOKEN_HEADROOM : 2400,
+    maxTokens: isRepair ? 8000 + REPAIR_TOKEN_HEADROOM : 8000,
   })
   return out.evidence
 }
@@ -264,7 +279,8 @@ export async function runGlobalEvidenceConfidence(
     schemaName: 'global_evidence_confidence',
     effort: isRepair ? 'high' : 'medium',
     allowHighReasoning: isRepair,
-    maxTokens: isRepair ? 800 + REPAIR_TOKEN_HEADROOM : 800,
+    // blanket bump, 2026-09-12 (was 800) — see runGlobalAssumptionsGenerate above
+    maxTokens: isRepair ? 8000 + REPAIR_TOKEN_HEADROOM : 8000,
   })
   const byId = new Map(out.confidence.map((c) => [c.claim_id, c.confidence]))
   const question_level_evidence = draft.map((d) => ({ ...d, confidence: byId.get(d.claim_id) ?? ('medium' as const) }))
@@ -318,9 +334,10 @@ export async function runConclusionsGenerate(
     // bounds allow up to 4 conclusions + 8 supporting_chain items at 600 chars
     // each - 900 tokens can't cover that even at typical (non-maxed) length.
     // Confirmed live: Gemini's raw output truncated mid-JSON on the 3rd
-    // conclusion, twice in a row, at exactly this cap.
+    // conclusion, twice in a row, at exactly this cap. Blanket-bumped to
+    // 8000, 2026-09-12 — see runGlobalAssumptionsGenerate above.
     // +REPAIR_TOKEN_HEADROOM on repair only — see budget.ts for why.
-    maxTokens: isRepair ? 1800 + REPAIR_TOKEN_HEADROOM : 1800,
+    maxTokens: isRepair ? 8000 + REPAIR_TOKEN_HEADROOM : 8000,
   })
 }
 
@@ -384,8 +401,9 @@ export async function runImplicationsGenerate(
     // structurally larger than conclusions_packet's own bounds, so it needed
     // at least the same headroom. Confirmed live: Gemini truncated mid-JSON
     // on the first implication's text field, twice in a row, at this cap.
-    // +REPAIR_TOKEN_HEADROOM on repair only — see budget.ts for why.
-    maxTokens: isRepair ? 1800 + REPAIR_TOKEN_HEADROOM : 1800,
+    // Blanket-bumped to 8000, 2026-09-12 — see runGlobalAssumptionsGenerate
+    // above. +REPAIR_TOKEN_HEADROOM on repair only — see budget.ts for why.
+    maxTokens: isRepair ? 8000 + REPAIR_TOKEN_HEADROOM : 8000,
   })
 }
 
@@ -442,7 +460,7 @@ export async function runFinalComposition(
       // "first-pass" call by definition; matches the medium-first-pass default
       // every other generate call now uses.
       effort: 'medium',
-      maxTokens: 1200,
+      maxTokens: 8000, // blanket bump, 2026-09-12 (was 1200) — see runGlobalAssumptionsGenerate above
     })
   } catch (err) {
     // Template fallback (2026-09-09, Samir's spec, real-verified live the

@@ -78,7 +78,7 @@ import {
   record,
   __resetRoutingState,
 } from './router-state'
-import { ATTEMPT_TIMEOUT_MS, attemptsForRole, type Attempt } from './router-lanes'
+import { ATTEMPT_TIMEOUT_MS, attemptsForRole, type Attempt, type SwarmTier } from './router-lanes'
 
 // Fail loudly if this module is ever pulled into a client bundle — the API keys
 // must never ship to the browser.
@@ -188,6 +188,10 @@ interface ExecuteOpts {
   // Opt-in past gpt-oss/qwen's 'high' floor — see reasoningEffortFor
   // (router-shared.ts) for what this actually does and why it's gated.
   allowHighReasoning?: boolean
+  // Only meaningful for role 'swarm' (router-lanes.ts's SwarmTier /
+  // attemptsForRole) — every other role ignores it. Undefined defaults to
+  // 'draft' inside attemptsForRole/swarmAttempts.
+  swarmTier?: SwarmTier
   maxTokens: number
   neededTokens: number // estimated input + output; drives size-aware routing
   deadlineAt: number //  epoch ms; shared across the parse-retry (see completeJSON)
@@ -207,7 +211,7 @@ interface ExecuteOpts {
 //   - Deadline: attempts stop once opts.deadlineAt passes, throwing the most
 //     actionable error seen, so a slow chain degrades instead of platform-killing.
 async function execute(role: AiRole, opts: ExecuteOpts): Promise<{ content: string; target: Target }> {
-  const attempts = attemptsForRole(role, opts.allowHighReasoning)
+  const attempts = attemptsForRole(role, opts.allowHighReasoning, opts.swarmTier)
   let last429: AiError | null = null
   let lastTransient: AiError | null = null
   let anyProviderTried = false
@@ -646,6 +650,14 @@ export async function completeJSON<T>(opts: {
   // Opt-in past gpt-oss/qwen's 'high' floor — see reasoningEffortFor
   // (router-shared.ts). Only meaningful when effort: 'high'; ignored otherwise.
   allowHighReasoning?: boolean
+  // Per-step DeepInfra model tier within role 'swarm' only (router-lanes.ts's
+  // SwarmTier) — ignored by every other role. Omitted (the default) is
+  // 'draft'; only orchestrator-perspectives.ts's stance/detail generation
+  // and orchestrator-global.ts's global-assumptions-generate pass 'large',
+  // only orchestrator-panel.ts's runReviewPanel/runMasterReview pass
+  // 'critic'. See TARGETS.deepinfraLarge/deepinfraCritic (router-config.ts)
+  // for why these two specific steps get a different model.
+  swarmTier?: SwarmTier
   maxTokens: number
   // Shared deadline (epoch ms) for a caller that itself makes several
   // sequential completeJSON calls — generateWithOptionalSearch's search
@@ -680,6 +692,7 @@ export async function completeJSON<T>(opts: {
     schemaName: opts.schemaName,
     effort: opts.effort,
     allowHighReasoning: opts.allowHighReasoning,
+    swarmTier: opts.swarmTier,
     maxTokens: opts.maxTokens,
     neededTokens,
     // One deadline covers the first chain AND the parse-retry chain, so the
