@@ -79,6 +79,7 @@ import {
   __resetRoutingState,
 } from './router-state'
 import { ATTEMPT_TIMEOUT_MS, attemptsForRole, type Attempt, type SwarmTier } from './router-lanes'
+import { deepinfraLimiter } from './router-concurrency'
 
 // Fail loudly if this module is ever pulled into a client bundle — the API keys
 // must never ship to the browser.
@@ -441,6 +442,14 @@ async function callProvider(
     : ({ type: 'json_object' as const })
   const reasoning_effort = reasoningEffortFor(attempt.model, opts.effort, opts.allowHighReasoning)
 
+  // Bounded to DEEPINFRA_MAX_CONCURRENT in-flight requests across every
+  // DeepInfra target (router-concurrency.ts) — one shared account, one real
+  // capacity ceiling. Every other provider is unaffected (no limiter to
+  // acquire). Acquired BEFORE raceTimeout starts its clock, so time spent
+  // waiting for a slot never eats into the request's own timeout budget —
+  // see router-concurrency.ts's header for the full 2026-09-13 incident.
+  const releaseSlot = attempt.provider === 'deepinfra' ? await deepinfraLimiter.acquire() : null
+
   let completion: OpenAI.Chat.Completions.ChatCompletion
   try {
     completion = (await raceTimeout(
@@ -484,6 +493,8 @@ async function callProvider(
       detail: errorText(err),
     })
     throw err
+  } finally {
+    releaseSlot?.()
   }
 
   const content = completion.choices[0]?.message?.content

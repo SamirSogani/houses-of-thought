@@ -26,7 +26,11 @@ relevant, since those share providers even though they don't share models.
   telemetry, see that doc's own note.
 - [concurrency.md](concurrency.md) — 9 simultaneous real production runs:
   a 33% persistence-write loss rate, one genuine content halt, and the
-  UX reality that every run needs manual intervention.
+  UX reality that every run needs manual intervention. See also
+  [concurrency-2026-09-13-local-dev-9way.md](concurrency-2026-09-13-local-dev-9way.md)
+  — a 3rd 9-way test, local dev, the new 3-tier model system, cut short by
+  an unrelated session interruption but showing real review-panel
+  degradation under load.
 - `providers/` — one doc per provider (`deepinfra.md`, `groq.md`,
   `mistral.md`, `google.md`, `cerebras.md`, `openrouter.md`): that provider's
   role across every lane it's used in, and every quirk/bug this codebase has

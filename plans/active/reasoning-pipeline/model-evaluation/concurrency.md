@@ -3,6 +3,15 @@
 See [README.md](README.md) for the 🟢/📋/⏳ provenance legend. Everything in
 this doc is 🟢 — first-hand, this session, 2026-08-14.
 
+**2026-09-13 update:** a third 9-way concurrent test ran against local dev
+with the new 3-tier model system — see
+[concurrency-2026-09-13-local-dev-9way.md](concurrency-2026-09-13-local-dev-9way.md).
+Unlike the two tests below, it was cut short by an unrelated session
+interruption before any house reached a confirmed final state, but it
+surfaced a real, reproducible degradation at both review-panel gates under
+load — read that file before assuming this system's concurrency story is
+still "0 of 9 losses."
+
 ## Setup
 
 9 concurrent real (non-dry-run) pipeline runs, n=2 each, launched via 9
