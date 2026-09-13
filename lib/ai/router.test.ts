@@ -16,6 +16,7 @@ import {
 } from './router'
 import { supportsJsonSchema } from './router-shared'
 import { TARGETS } from './router-config'
+import { deepinfraLimiter } from './router-concurrency'
 
 // Every default target must look configured (record()/laneStep read these).
 const KEY_ENVS = [
@@ -264,6 +265,44 @@ describe('swarm per-step model tiers (2026-09-12)', () => {
   it('synthesis (final-composition) ignores swarmTier — always the shared draft model', async () => {
     await expect(ask('synthesis', { swarmTier: 'large' })).resolves.toEqual({ ok: true })
     expect(calls[0].model).toBe(MODELS.deepinfra)
+  })
+})
+
+describe('DeepInfra concurrency limiter wiring (2026-09-13)', () => {
+  // The limiter's own queuing semantics (max-holders, FIFO queuing) are
+  // covered in router-concurrency.test.ts in isolation — this describe block
+  // only checks that router.ts's callProvider acquires/releases the shared
+  // singleton for the right provider and never leaks a slot. See
+  // router-concurrency.ts's header for the 2026-09-13 incident this fixes.
+  it('a deepinfra call acquires and releases the shared limiter — no leaked slot', async () => {
+    expect(deepinfraLimiter.snapshot()).toEqual({ active: 0, queued: 0, max: expect.any(Number) })
+    await expect(ask('swarm')).resolves.toEqual({ ok: true })
+    // Acquired-then-released around the single call above — back to idle.
+    expect(deepinfraLimiter.snapshot().active).toBe(0)
+    expect(deepinfraLimiter.snapshot().queued).toBe(0)
+  })
+
+  it('a deepinfra call still releases its slot on failure (the finally, not just the happy path)', async () => {
+    script = () => { throw makeErr(429, 'rate limit') }
+    await expect(ask('swarm')).rejects.toThrow()
+    // 3 same-target retries (DEEPINFRA_SAME_TARGET_ATTEMPTS), each must have
+    // released its own slot — none leaked despite every attempt throwing.
+    expect(deepinfraLimiter.snapshot().active).toBe(0)
+    expect(deepinfraLimiter.snapshot().queued).toBe(0)
+  })
+
+  it('a non-deepinfra-only call never touches the deepinfra limiter', async () => {
+    // suggestor's first attempt is deepinfra, so force it straight to a
+    // non-deepinfra target to isolate this: fail deepinfra, succeed mistral.
+    script = (m) => (m === MODELS.deepinfra ? (() => { throw makeErr(429, 'rate limit') })() : OK)
+    await expect(ask('suggestor')).resolves.toEqual({ ok: true })
+    // The deepinfra attempt above DID acquire/release once (it's still a
+    // deepinfra call, just a failing one) — asserting idle afterward proves
+    // that failed attempt released cleanly AND that the subsequent mistral
+    // success never touched the limiter at all (it would still show idle
+    // either way, but a leak from either call would surface as active > 0).
+    expect(deepinfraLimiter.snapshot().active).toBe(0)
+    expect(deepinfraLimiter.snapshot().queued).toBe(0)
   })
 })
 
