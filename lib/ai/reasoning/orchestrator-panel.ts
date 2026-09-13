@@ -107,6 +107,10 @@ export async function runReviewPanel(
       try {
         const verdict = await completeJSON({
           role: 'swarm',
+          // Samir's 2026-09-12 per-step tiering (router-config.ts's
+          // TARGETS.deepinfraCritic) — every one of the 6 review gates
+          // routes through here, so this one line covers all of them.
+          swarmTier: 'critic',
           system,
           user,
           schema: SingleStandardVerdictSchema,
@@ -126,7 +130,16 @@ export async function runReviewPanel(
           // as it did before medium/allowHighReasoning existed), this is a real
           // behavior change for gpt-oss too, not just Gemini.
           effort: 'low',
-          maxTokens: 800,
+          // 800 → 8000, 2026-09-12 (Samir): real-verified this session
+          // (full test house, orchestrator-global.ts's tier-8 large-tier
+          // fix) that DeepSeek-V3 (the critic tier) needed ~7400 tokens to
+          // answer THIS schema on a real run — 6 `upstream call failed`/
+          // `Request timed out` errors here, `neededTokens: 7409-7447`
+          // against this 800 cap, before the run's own retries recovered
+          // it. Part of the blanket 8000-everywhere bump across the whole
+          // reasoning pipeline — see orchestrator-global.ts's
+          // runGlobalAssumptionsGenerate for the full rationale.
+          maxTokens: 8000,
         })
         return [standard.id, verdict] as const
       } catch (err) {
@@ -176,6 +189,10 @@ export async function runMasterReview(
   const { system, user } = buildMasterReviewPrompt(verdict, artifact, context)
   const guidance = await completeJSON({
     role: 'swarm',
+    // Samir's 2026-09-12 per-step tiering (router-config.ts's
+    // TARGETS.deepinfraCritic) — master review is reviewer-adjacent work
+    // (synthesizing 9 standard verdicts), same tier as runReviewPanel above.
+    swarmTier: 'critic',
     system,
     user,
     schema: MasterReviewGuidanceSchema,
@@ -186,7 +203,8 @@ export async function runMasterReview(
     // 800 chars + guidance 1500 chars) — 'high' reasoning on a synthesis task
     // over a large input (full artifact JSON + 9 verdicts' notes) can spend
     // real tokens thinking before it writes anything, see reasoningEffortFor.
-    maxTokens: 2600,
+    // Blanket-bumped 2600 → 8000, 2026-09-12 — see runReviewPanel above.
+    maxTokens: 8000,
   })
   log.info('ai/reasoning/panel', 'master review', {
     subjectId: verdict.subject_id,

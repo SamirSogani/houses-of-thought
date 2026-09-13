@@ -20,101 +20,15 @@ See [README.md](../README.md) for the 🟢/📋/⏳ provenance legend. Cross-ref
   fast enough that even n=2 test runs failed roughly half the time.
 - Not in `drafter` or `suggestor` — see those providers' own docs.
 
-## Model history — seven swaps, one target, one line to change
+## Model history and `supportsJsonSchema()` status
 
-`TARGETS.deepinfra.model` ([router-config.ts](../../../../../lib/ai/router-config.ts))
-is deliberately model-agnostic in naming (not `deepinfraGptOss20b` etc.) —
-2026-08-10, after the first swap required a 4-file rename. Every entry below
-is 📋 from that file's own comment history plus commit `e8a8682`, except the
-last three (this session and the next, 🟢).
-
-1. **`Llama-3.1-8B-Instruct`** (original). Swapped away: didn't reliably
-   incorporate the review panel's regeneration feedback — repeatedly
-   re-failed the same standards instead of converging.
-2. **`openai/gpt-oss-20b`** (2026-08-10). Chosen for the same-model-family
-   confidence Groq already had with it. Failure mode: its "Harmony" response
-   format has a hidden internal reasoning phase that sometimes never hands
-   off to the visible answer — 5 consecutive real failures on
-   `global-assumptions-generate` in one incident, confirmed via DeepInfra's
-   own dashboard (received, billed, no rate limit — model behavior, not
-   infra). Full investigation: [doc 23](../../23-deepinfra-intermittent-reliability-and-same-target-retry.md).
-3. **`deepseek-ai/DeepSeek-V3`** (2026-08-13, same-day incident response).
-   Plain non-reasoning model — no hidden channel, structurally can't hit
-   gpt-oss-20b's failure class. Real-verified twice, clean both times
-   (Frame 9/9, both Perspectives 9/9, zero regenerations). Only problem:
-   very slow (671B/37B active MoE) — one step alone took 2.3 minutes; the
-   whole Perspectives layer over 8 minutes. Forced
-   `DEEPINFRA_SWARM_TIMEOUT_MS` 60s→200s just to let it finish; never
-   right-sized back down since. The only model on this target with
-   confirmed strict `json_schema` support
-   (`supportsJsonSchema()`, router-shared.ts — DeepInfra's docs explicitly
-   name it).
-4. **`meta-llama/Llama-3.3-70B-Instruct-Turbo`** (2026-08-13, hours later).
-   Theory: keep DeepSeek-V3's no-hidden-channel win, smaller (70B dense) so
-   faster. Speed theory held (~25-27s/call) but never got assessed properly:
-   **4/4 real attempts failed** — wrapped valid JSON in a markdown code
-   fence, breaking `JSON.parse`. Root cause: never granted
-   `supportsJsonSchema()` (unconfirmed on DeepInfra), so it ran on the
-   looser `json_object` fallback with no constrained-decoding guarantee.
-   Note the exact id matters: the bare `meta-llama/Llama-3.3-70B-Instruct`
-   404s on DeepInfra — only the FP8-quantized `-Turbo` variant is served.
-5. **`Qwen/Qwen3-235B-A22B-Instruct-2507`** (2026-08-13, same evening).
-   Chosen for a *structural* guarantee against gpt-oss-20b's failure class:
-   its model page states it "supports only non-thinking mode and does not
-   generate `<think></think>` blocks" — not a default that could be
-   accidentally overridden. Real-verified once, clean (22/22, zero
-   regenerations, zero JSON-parsing failures) — added
-   `stripMarkdownFence()` (router.ts) as general insurance the same session,
-   whether or not Qwen actually needed it is unconfirmed either way. **Then
-   failed in real production traffic the next day** (this session,
-   `ai-invalid-output` at `perspectives-evidence-strategy`) — see
-   [reliability.md](../reliability.md)'s caveat section for why one clean
-   run isn't proof.
-6. **`deepseek-ai/DeepSeek-V4-Flash-0731`** (2026-08-14, merged to
-   production; **rolled back 2026-08-15, see #7**) 🟢. Exploratory swap —
-   Qwen hadn't failed *its own* real-verification, this was tried because
-   DeepSeek released V4-Flash the same week (284B/13B active MoE, 1M
-   context, "agentic"-tuned). Confirmed the exact dated id (`-0731`) over
-   the bare `DeepSeek-V4-Flash`, which DeepInfra's own page copy marks as
-   the superseded preview. **Known, flagged-before-testing risk:** unlike
-   DeepSeek-V3 and Qwen, this model's page documents a `reasoning_effort`
-   param and `reasoning_content` field — it *does* have a hidden reasoning
-   channel, the same shape of mechanism that broke gpt-oss-20b. Solo
-   real-verification (22/22, zero regenerations, zero `ai-empty-output`)
-   came back clean — but the risk was real: a **9-way concurrent real-load
-   test the next day found 3/9 (33%) permanent failures**, 5
-   `ai-invalid-output` events across 3 questions plus a separate silent-stall
-   pattern on 2 more, after 2 retries each with no recovery. Full data:
-   [26-deepseek-v4-flash-model-swap-plan.md](../../26-deepseek-v4-flash-model-swap-plan.md),
-   [reliability.md](../reliability.md). Also never granted
-   `supportsJsonSchema()` — DeepInfra's structured-outputs docs still only
-   confirm DeepSeek-V3.
-7. **`Qwen/Qwen3-235B-A22B-Instruct-2507`** (2026-08-15, rollback, current
-   default) 🟢. Reverted to swap #5 via the `DEEPINFRA_MODEL` Vercel env
-   var (Production) — no code deploy, per `router-config.ts`'s own comment
-   on the override (the code's hardcoded default string still reads
-   `deepseek-ai/DeepSeek-V4-Flash-0731`; the env var is what actually
-   governs production now). Chosen because Qwen's own known failure
-   (`ai-invalid-output`, 1 production incident, see swap #5) is a single
-   data point against DeepSeek-V4-Flash-0731's 3/9 concurrent-load failure
-   rate — not a clean bill of health, but the better-evidenced option
-   between two thinly-verified models. Worth re-running the same 9-way
-   concurrent-load test against Qwen on current code for a fair
-   apples-to-apples comparison — not yet done (see reliability.md's
-   "Still needed").
-
-## `supportsJsonSchema()` status — one model, out of six
-
-Only `deepseek-ai/DeepSeek-V3` has confirmed strict `json_schema` support on
-DeepInfra ([router-shared.ts](../../../../../lib/ai/router-shared.ts), matched
-via a `deepseek-v3` substring, deliberately not a bare `deepseek` match so R1
-and other variants don't silently inherit it). Every other model this target
-has run — including the current default — runs on the looser `json_object`
-fallback (schema described in the prompt, not enforced), backed only by
-`JSON_SHAPE_GUARDRAIL` (a prompt-level ask) and `stripMarkdownFence()` (a
-parse-time defense). This codebase's own rule, learned from Llama-3.3-70B:
-a model's own "Supports JSON" badge is not a reliable signal — only an
-explicit mention in DeepInfra's structured-outputs docs earns the flag.
+Moved to [deepinfra-model-history.md](deepinfra-model-history.md) 2026-09-12
+— eleven swaps/tuning changes deep, that section alone was pushing this file
+past the 200-line hard split threshold (CLAUDE.md). See that file for the
+full swap-by-swap narrative (`TARGETS.deepinfra`/`deepinfraLarge`/
+`deepinfraCritic`, [router-config.ts](../../../../../lib/ai/router-config.ts))
+and which models have strict `json_schema` support granted
+([router-shared.ts](../../../../../lib/ai/router-shared.ts)).
 
 ## Known open items
 
@@ -128,4 +42,8 @@ explicit mention in DeepInfra's structured-outputs docs earns the flag.
 - Gemini truncates `global_assumptions_packet` at 900 tokens on repair —
   a DeepInfra-adjacent finding (surfaced while DeepInfra was the primary
   suspect), not yet fixed; see doc 20's "Known gaps."
+- Every reasoning-pipeline `maxTokens` (orchestrator-*.ts) is now a uniform
+  8000, 2026-09-12 (deepinfra-model-history.md #11) — replaces per-schema
+  tuning as the fix for hidden-reasoning-token models burning a tight
+  budget before writing JSON (#9, #10, #11). Real-verified clean same day.
 - No per-request cost/token telemetry — see [cost.md](../cost.md).

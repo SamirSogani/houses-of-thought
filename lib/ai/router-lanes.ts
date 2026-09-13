@@ -434,9 +434,29 @@ function consoleAttempts(): Attempt[] {
 // addendum.
 const DEEPINFRA_SAME_TARGET_ATTEMPTS = 3
 
-function swarmAttempts(allowHighReasoning: boolean): Attempt[] {
+// Per-step model tier within the swarm role (2026-09-12, Samir's call — see
+// TARGETS.deepinfra/deepinfraLarge/deepinfraCritic's own comments,
+// router-config.ts, for the full "why 3 models" rationale). 'draft' is the
+// default every swarm call site gets unless it explicitly asks otherwise —
+// only orchestrator-perspectives.ts's stance/detail generation and
+// orchestrator-global.ts's global-assumptions-generate pass 'large'; only
+// orchestrator-panel.ts's runReviewPanel/runMasterReview pass 'critic'.
+// Still zero OTHER providers involved for any tier — Samir's original "no
+// matter what" instruction (decision 020) is about provider, not model, and
+// stands unchanged; only which DeepInfra model gets the 3 same-target
+// retries differs per tier.
+export type SwarmTier = 'draft' | 'large' | 'critic'
+
+function targetForSwarmTier(tier: SwarmTier): Target {
+  if (tier === 'large') return TARGETS.deepinfraLarge
+  if (tier === 'critic') return TARGETS.deepinfraCritic
+  return TARGETS.deepinfra
+}
+
+function swarmAttempts(allowHighReasoning: boolean, tier: SwarmTier = 'draft'): Attempt[] {
   const timeoutMs = allowHighReasoning ? DEEPINFRA_SWARM_LARGE_TIMEOUT_MS : DEEPINFRA_SWARM_TIMEOUT_MS
-  return Array.from({ length: DEEPINFRA_SAME_TARGET_ATTEMPTS }, () => ({ ...TARGETS.deepinfra, timeoutMs }))
+  const target = targetForSwarmTier(tier)
+  return Array.from({ length: DEEPINFRA_SAME_TARGET_ATTEMPTS }, () => ({ ...target, timeoutMs }))
 }
 
 // Reasoning-pipeline-only lane, final-composition step ONLY (runFinalComposition,
@@ -470,12 +490,16 @@ function synthesisAttempts(allowHighReasoning: boolean): Attempt[] {
 // Built fresh per request so it reflects current penalty-box / recovery state.
 // allowHighReasoning only changes anything for swarm/synthesis (see
 // DEEPINFRA_SWARM_LARGE_TIMEOUT_MS above) — every other role ignores it.
-export function attemptsForRole(role: AiRole, allowHighReasoning = false): Attempt[] {
+// swarmTier likewise only means anything for role 'swarm' (see SwarmTier
+// above) — every other role, synthesis included, ignores it too; synthesis
+// stays single-purpose (final-composition only) on TARGETS.deepinfra, same
+// as before this param existed.
+export function attemptsForRole(role: AiRole, allowHighReasoning = false, swarmTier?: SwarmTier): Attempt[] {
   if (role === 'drafter') return draftAttempts()
   if (role === 'suggestor') return suggestorAttempts()
   if (role === 'feedback') return feedbackAttempts()
   if (role === 'console') return consoleAttempts()
-  if (role === 'swarm') return swarmAttempts(allowHighReasoning)
+  if (role === 'swarm') return swarmAttempts(allowHighReasoning, swarmTier)
   if (role === 'synthesis') return synthesisAttempts(allowHighReasoning)
   return realtimeAttempts() // coach | critic
 }
