@@ -45,7 +45,7 @@ import { SectionCard, FieldLabel, TextArea } from '@/components/profile/primitiv
 // own file once adding them here pushed this page past the ~600 LOC
 // guideline — see that file's own header comment for the per-domain
 // "one fact per item" choices.
-import { DeepDiveResultView } from '@/components/projects/DeepDiveResults'
+import { DeepDiveResultView, VerdictPanel, MasterGuidancePanel } from '@/components/projects/DeepDiveResults'
 
 // Transient upstream hiccup (rate limit, timeout, malformed-output retries
 // exhausted, or a plain network exception) — worth a few automatic retries
@@ -424,14 +424,43 @@ export default function DeepDivePage({ params }: { params: Promise<{ id: string;
                           </span>
                         )}
                       </div>
-                      {entry.status === 'done' && entry.result != null && (
+
+                      {/* Live transparency (added after a real run left a
+                          founder staring at a bare "Error" chip with no way
+                          to see what the engine actually produced or why the
+                          review panel rejected it): the draft renders the
+                          moment it exists — mid-run, or as the last attempt
+                          on an errored row — and the verdict/guidance render
+                          alongside it, all read-only until a run reaches
+                          'done' and result gets its own save-enabled render
+                          below. */}
+                      {entry.status === 'done' && entry.result != null ? (
                         <DeepDiveResultView
                           domain={domain}
                           result={entry.result}
                           projectId={project.id}
                           onSaved={() => handleDeepDiveSaved(entry.id)}
                         />
+                      ) : (
+                        displayRow.draft != null && (
+                          <>
+                            {displayRow.status === 'error' && (
+                              <p style={{ fontSize: 12, color: 'var(--warning-text)', marginTop: 10 }}>
+                                This attempt didn&apos;t pass review — showing the last draft produced, not saved to the project.
+                              </p>
+                            )}
+                            <DeepDiveResultView
+                              domain={domain}
+                              result={displayRow.draft}
+                              projectId={project.id}
+                              onSaved={() => handleDeepDiveSaved(entry.id)}
+                              readOnly
+                            />
+                          </>
+                        )
                       )}
+                      {displayRow.verdict != null && <VerdictPanel verdict={displayRow.verdict} />}
+                      {displayRow.master_guidance != null && <MasterGuidancePanel guidance={displayRow.master_guidance} />}
                     </SectionCard>
                   )
                 })}

@@ -30,6 +30,19 @@ import type { DeepDiveResearchCandidate } from '@/lib/ai/reasoning/deep-dive-res
 import type { DeepDiveStandpoint } from '@/lib/ai/reasoning/deep-dive-perspectives'
 import type { DeepDiveAssumption } from '@/lib/ai/reasoning/deep-dive-assumptions'
 import type { DeepDiveImplicationItem } from '@/lib/ai/reasoning/deep-dive-implications'
+import { STANDARD_IDS, type StandardId, type ReviewPanelVerdict, type MasterReviewGuidance } from '@/lib/ai/reasoning/contracts'
+
+const STANDARD_LABEL: Record<StandardId, string> = {
+  clarity: 'Clarity',
+  accuracy: 'Accuracy',
+  precision: 'Precision',
+  relevance: 'Relevance',
+  depth: 'Depth',
+  breadth: 'Breadth',
+  logic: 'Logic',
+  significance: 'Significance',
+  fairness: 'Fairness',
+}
 
 const resultCardStyle: React.CSSProperties = {
   border: '1px solid var(--rule)',
@@ -72,7 +85,7 @@ function SourceLink({ url, label }: { url: string; label: string }) {
 // parenthetically (title + URL) so a fact saved out of this list still
 // traces back to what supports it — the same reason ResearchResults.tsx
 // never lets a claim travel without its source chip alongside it.
-function ResearchResultList({ candidates, projectId, onSaved }: { candidates: DeepDiveResearchCandidate[]; projectId: string; onSaved: () => void }) {
+function ResearchResultList({ candidates, projectId, onSaved, readOnly }: { candidates: DeepDiveResearchCandidate[]; projectId: string; onSaved: () => void; readOnly?: boolean }) {
   return (
     <div style={resultListStyle}>
       {candidates.map((c, i) => (
@@ -81,7 +94,9 @@ function ResearchResultList({ candidates, projectId, onSaved }: { candidates: De
           <div style={{ fontSize: 12, color: 'var(--ink-subtle)', lineHeight: 1.45, marginTop: 5 }}>{c.quoteOrParaphrase}</div>
           <div style={resultRowStyle}>
             <SourceLink url={c.url} label={c.sourceTitle} />
-            <SaveFactsToProjectButton projectId={projectId} facts={[`${c.claim} (source: ${c.sourceTitle}, ${c.url})`]} onSaved={onSaved} />
+            {!readOnly && (
+              <SaveFactsToProjectButton projectId={projectId} facts={[`${c.claim} (source: ${c.sourceTitle}, ${c.url})`]} onSaved={onSaved} />
+            )}
           </div>
         </div>
       ))}
@@ -97,7 +112,7 @@ function ResearchResultList({ candidates, projectId, onSaved }: { candidates: De
 // as generic once separated from the standpoint that argues for them, and
 // would multiply save buttons per card for little benefit. key_claims still
 // render below the summary so nothing is hidden, just not separately savable.
-function PerspectivesResultList({ standpoints, projectId, onSaved }: { standpoints: DeepDiveStandpoint[]; projectId: string; onSaved: () => void }) {
+function PerspectivesResultList({ standpoints, projectId, onSaved, readOnly }: { standpoints: DeepDiveStandpoint[]; projectId: string; onSaved: () => void; readOnly?: boolean }) {
   return (
     <div style={resultListStyle}>
       {standpoints.map((s, i) => (
@@ -111,10 +126,12 @@ function PerspectivesResultList({ standpoints, projectId, onSaved }: { standpoin
               ))}
             </ul>
           )}
-          <div style={resultRowStyle}>
-            <span />
-            <SaveFactsToProjectButton projectId={projectId} facts={[`${s.label}: ${s.summary}`]} onSaved={onSaved} />
-          </div>
+          {!readOnly && (
+            <div style={resultRowStyle}>
+              <span />
+              <SaveFactsToProjectButton projectId={projectId} facts={[`${s.label}: ${s.summary}`]} onSaved={onSaved} />
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -127,7 +144,7 @@ function PerspectivesResultList({ standpoints, projectId, onSaved }: { standpoin
 // would be if false keeps it a load-bearing note rather than a vague one.
 // why_it_matters stays a display-only elaboration, not folded into the fact,
 // to keep the saved string a single specific claim rather than a paragraph.
-function AssumptionsResultList({ assumptions, projectId, onSaved }: { assumptions: DeepDiveAssumption[]; projectId: string; onSaved: () => void }) {
+function AssumptionsResultList({ assumptions, projectId, onSaved, readOnly }: { assumptions: DeepDiveAssumption[]; projectId: string; onSaved: () => void; readOnly?: boolean }) {
   return (
     <div style={resultListStyle}>
       {assumptions.map((a, i) => (
@@ -136,11 +153,13 @@ function AssumptionsResultList({ assumptions, projectId, onSaved }: { assumption
           <div style={{ fontSize: 12, color: 'var(--ink-subtle)', lineHeight: 1.45, marginTop: 5 }}>{a.why_it_matters}</div>
           <div style={resultRowStyle}>
             <span className="mono" style={{ fontSize: 9, color: 'var(--ink-subtle)', textTransform: 'uppercase' }}>Risk if false: {a.risk_if_false}</span>
-            <SaveFactsToProjectButton
-              projectId={projectId}
-              facts={[`${a.assumption} (risk if false: ${a.risk_if_false})`]}
-              onSaved={onSaved}
-            />
+            {!readOnly && (
+              <SaveFactsToProjectButton
+                projectId={projectId}
+                facts={[`${a.assumption} (risk if false: ${a.risk_if_false})`]}
+                onSaved={onSaved}
+              />
+            )}
           </div>
         </div>
       ))}
@@ -155,7 +174,7 @@ function AssumptionsResultList({ assumptions, projectId, onSaved }: { assumption
 // alone into the project's key facts reads as unmoored without knowing who
 // bears it and over what timeframe, both of which the model is required to
 // name but doesn't repeat inside `text` itself.
-function ImplicationsResultList({ items, projectId, onSaved }: { items: DeepDiveImplicationItem[]; projectId: string; onSaved: () => void }) {
+function ImplicationsResultList({ items, projectId, onSaved, readOnly }: { items: DeepDiveImplicationItem[]; projectId: string; onSaved: () => void; readOnly?: boolean }) {
   const ikindLabel: Record<DeepDiveImplicationItem['ikind'], string> = { pos: 'Positive', neg: 'Negative', unc: 'Uncertain' }
   return (
     <div style={resultListStyle}>
@@ -166,11 +185,13 @@ function ImplicationsResultList({ items, projectId, onSaved }: { items: DeepDive
             <span className="mono" style={{ fontSize: 9, color: 'var(--ink-subtle)', textTransform: 'uppercase' }}>
               {ikindLabel[item.ikind]} · {item.horizon} · {item.who}
             </span>
-            <SaveFactsToProjectButton
-              projectId={projectId}
-              facts={[`${item.text} (${item.horizon.toLowerCase()}, affecting ${item.who})`]}
-              onSaved={onSaved}
-            />
+            {!readOnly && (
+              <SaveFactsToProjectButton
+                projectId={projectId}
+                facts={[`${item.text} (${item.horizon.toLowerCase()}, affecting ${item.who})`]}
+                onSaved={onSaved}
+              />
+            )}
           </div>
         </div>
       ))}
@@ -184,15 +205,101 @@ function ImplicationsResultList({ items, projectId, onSaved }: { items: DeepDive
 // dispatches on (app/api/ai/deep-dive/route.ts's runDeepDiveGenerate), each
 // case casting to that domain's own result-array type before rendering. No
 // runtime schema-detection: the page already knows which domain it's on.
-export function DeepDiveResultView({ domain, result, projectId, onSaved }: { domain: DeepDiveDomain; result: unknown; projectId: string; onSaved: () => void }) {
+// `readOnly` (added alongside the live/error transparency panels below):
+// true for a draft the review panel hasn't cleared yet (an in-progress
+// attempt, or the last attempt on a row that ended in 'error') — the save
+// action is reserved for a panel-reviewed `result`, never an unreviewed
+// `draft`, so readOnly just omits the button rather than branching into a
+// second renderer per domain.
+export function DeepDiveResultView({
+  domain,
+  result,
+  projectId,
+  onSaved,
+  readOnly,
+}: {
+  domain: DeepDiveDomain
+  result: unknown
+  projectId: string
+  onSaved: () => void
+  readOnly?: boolean
+}) {
   switch (domain) {
     case 'research':
-      return <ResearchResultList candidates={result as DeepDiveResearchCandidate[]} projectId={projectId} onSaved={onSaved} />
+      return <ResearchResultList candidates={result as DeepDiveResearchCandidate[]} projectId={projectId} onSaved={onSaved} readOnly={readOnly} />
     case 'perspectives':
-      return <PerspectivesResultList standpoints={result as DeepDiveStandpoint[]} projectId={projectId} onSaved={onSaved} />
+      return <PerspectivesResultList standpoints={result as DeepDiveStandpoint[]} projectId={projectId} onSaved={onSaved} readOnly={readOnly} />
     case 'assumptions':
-      return <AssumptionsResultList assumptions={result as DeepDiveAssumption[]} projectId={projectId} onSaved={onSaved} />
+      return <AssumptionsResultList assumptions={result as DeepDiveAssumption[]} projectId={projectId} onSaved={onSaved} readOnly={readOnly} />
     case 'implications':
-      return <ImplicationsResultList items={result as DeepDiveImplicationItem[]} projectId={projectId} onSaved={onSaved} />
+      return <ImplicationsResultList items={result as DeepDiveImplicationItem[]} projectId={projectId} onSaved={onSaved} readOnly={readOnly} />
   }
+}
+
+// Live transparency (added after a real debugging session surfaced that an
+// errored or in-progress run showed nothing but a status label): renders the
+// 9-standard review panel's own verdict, in the reviewers' own words, the
+// moment it exists — whether the run is still looping toward a pass, or
+// already landed on 'error'. A <details> disclosure, not always-open: this
+// is "what the review panel actually said," useful to check, not something
+// that should dominate the card by default.
+export function VerdictPanel({ verdict }: { verdict: ReviewPanelVerdict }) {
+  const failing = STANDARD_IDS.filter((id) => !verdict.standards[id].pass)
+  return (
+    <details style={{ marginTop: 12 }}>
+      <summary
+        className="mono"
+        style={{ fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--ink-subtle)', cursor: 'pointer' }}
+      >
+        Review panel: {failing.length === 0 ? 'passed all 9 standards' : `${failing.length} of 9 standards failed`}
+      </summary>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+        {STANDARD_IDS.map((id) => {
+          const s = verdict.standards[id]
+          return (
+            <div key={id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <span
+                className="mono"
+                style={{
+                  flex: '0 0 auto',
+                  fontSize: 9,
+                  textTransform: 'uppercase',
+                  color: s.pass ? 'var(--green-text)' : 'var(--warning-text)',
+                  border: `1px solid ${s.pass ? 'var(--green-text)' : 'var(--warning-text)'}`,
+                  borderRadius: 4,
+                  padding: '2px 6px',
+                  minWidth: 78,
+                  textAlign: 'center',
+                }}
+              >
+                {STANDARD_LABEL[id]}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--ink-mid)', lineHeight: 1.5 }}>{s.notes}</span>
+            </div>
+          )
+        })}
+      </div>
+    </details>
+  )
+}
+
+// The one call that sees all 9 verdicts together, fired only on the final
+// guided attempt (orchestrator-panel.ts's runMasterReview) — shown open
+// (not behind a second disclosure) since by the time this exists, the run is
+// already on its last attempt and this guidance is the most direct answer to
+// "why did this end up failing."
+export function MasterGuidancePanel({ guidance }: { guidance: MasterReviewGuidance }) {
+  return (
+    <div style={{ marginTop: 12, padding: 12, borderRadius: 9, background: 'var(--amber-tint)', border: '1px solid var(--amber-hover)' }}>
+      <div className="mono" style={{ fontSize: 9, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--amber-text)' }}>
+        Senior reviewer&apos;s guidance (final attempt)
+      </div>
+      <p style={{ fontSize: 12.5, color: 'var(--ink)', lineHeight: 1.5, marginTop: 6 }}>{guidance.guidance}</p>
+      {!/^\s*none\b/i.test(guidance.contradictions) && (
+        <p style={{ fontSize: 12, color: 'var(--ink-mid)', lineHeight: 1.5, marginTop: 6 }}>
+          <strong>Contradictions noted:</strong> {guidance.contradictions}
+        </p>
+      )}
+    </div>
+  )
 }
