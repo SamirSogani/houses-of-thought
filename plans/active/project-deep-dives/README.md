@@ -1,6 +1,11 @@
 # Plan — Project Deep Dive tools
 
-**Scoped:** 2026-09-15 · **Status:** Not started
+**Scoped:** 2026-09-15 · **Status:** All 4 phases implemented on branch
+`project-deep-dive-tools` — not yet merged to main or deployed anywhere;
+migration 0052 has not been applied to any environment. See the Phases table
+below for per-phase detail. (Decision 022 itself is left at "Decided —
+implementation not started" — updating that status line is not this plan's
+call to make.)
 **Implements:** [decision 022](../../../decisions/022-project-deep-dive-tools.md),
 which has the full rationale — read that first, this doc is execution only.
 
@@ -34,12 +39,12 @@ applies. In addition, from decision 022:
 
 ## Phases — execute in order; each is independently shippable
 
-| Phase | Doc | Delivers |
-|---|---|---|
-| 1 | [01-schema-and-entry-points.md](01-schema-and-entry-points.md) | History table + RLS, 4 boxes on the Project page, Deep Dive page shell (prompt box + history list). No generation yet. |
-| 2 | [02-generation-engine.md](02-generation-engine.md) | The domain-parameterized generate-and-review engine, wired to **Research** first (extends existing Research Mode — cheapest to validate end to end). |
-| 3 | [03-remaining-domains.md](03-remaining-domains.md) | Perspectives, Assumptions, Implications on the same engine from Phase 2. |
-| 4 | [04-save-to-project.md](04-save-to-project.md) | Explicit "Save to project" action wiring a Deep Dive result into project key facts. |
+| Phase | Doc | Delivers | Status |
+|---|---|---|---|
+| 1 | [01-schema-and-entry-points.md](01-schema-and-entry-points.md) | History table + RLS, 4 boxes on the Project page, Deep Dive page shell (prompt box + history list). No generation yet. | ✅ Implemented (branch `project-deep-dive-tools`, not yet merged — migration 0052 not yet applied anywhere) |
+| 2 | [02-generation-engine.md](02-generation-engine.md) | The domain-parameterized generate-and-review engine, wired to **Research** first (extends existing Research Mode — cheapest to validate end to end). | ✅ Implemented (branch `project-deep-dive-tools`, not yet merged — migration 0052 not yet applied anywhere) |
+| 3 | [03-remaining-domains.md](03-remaining-domains.md) | Perspectives, Assumptions, Implications on the same engine from Phase 2. | ✅ Implemented (branch `project-deep-dive-tools`, not yet merged — migration 0052 not yet applied anywhere) |
+| 4 | [04-save-to-project.md](04-save-to-project.md) | Explicit "Save to project" action wiring a Deep Dive result into project key facts. | ✅ Implemented (branch `project-deep-dive-tools`, not yet merged — migration 0052 not yet applied anywhere) |
 
 ## Execution protocol
 

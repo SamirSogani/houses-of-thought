@@ -33,12 +33,19 @@ import {
   isDeepDiveDomain,
   deepDiveStatusLabel,
   markDeepDiveError,
+  markDeepDiveSaved,
   DEEP_DIVE_DOMAIN_META,
   type DeepDiveDomain,
   type DeepDiveRow,
   type DeepDiveStatus,
 } from '@/lib/projects/deepDives'
 import { SectionCard, FieldLabel, TextArea } from '@/components/profile/primitives'
+// Phase 4 (plans/active/project-deep-dives/04-save-to-project.md): the
+// per-domain result renderers + "Save to project" wiring, split into their
+// own file once adding them here pushed this page past the ~600 LOC
+// guideline — see that file's own header comment for the per-domain
+// "one fact per item" choices.
+import { DeepDiveResultView } from '@/components/projects/DeepDiveResults'
 
 // Transient upstream hiccup (rate limit, timeout, malformed-output retries
 // exhausted, or a plain network exception) — worth a few automatic retries
@@ -65,6 +72,29 @@ function StatusChip({ status }: { status: DeepDiveStatus }) {
       style={{ fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color, border: `1px solid ${color}`, borderRadius: 4, padding: '2px 6px' }}
     >
       {statusLabel[status]}
+    </span>
+  )
+}
+
+// Phase 4 (plans/active/project-deep-dives/04-save-to-project.md): sits next
+// to StatusChip on a history entry that has saved_to_project set — a founder
+// scanning history can see which runs already contributed to the project's
+// key facts without opening each one.
+function SavedChip() {
+  return (
+    <span
+      className="mono"
+      style={{
+        fontSize: 9,
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        color: 'var(--green-text)',
+        border: '1px solid var(--green-text)',
+        borderRadius: 4,
+        padding: '2px 6px',
+      }}
+    >
+      Saved to project
     </span>
   )
 }
@@ -144,6 +174,21 @@ export default function DeepDivePage({ params }: { params: Promise<{ id: string;
       const next = { ...prev }
       delete next[deepDiveId]
       return next
+    })
+  }, [])
+
+  // Phase 4: fires once per SaveFactsToProjectButton click anywhere in a
+  // 'done' entry's result list. Updates the local list immediately so
+  // SavedChip appears without a refetch, and persists saved_to_project in
+  // the background — same fire-and-forget-with-a-log-on-failure pattern
+  // runDeepDive's own markDeepDiveError call already uses below, since a
+  // failed write here just means the chip doesn't show on next load, not
+  // that the fact itself failed to save (appendProjectContextFacts already
+  // resolved by the time onSaved runs).
+  const handleDeepDiveSaved = useCallback((deepDiveId: string) => {
+    setEntries((prev) => prev?.map((e) => (e.id === deepDiveId ? { ...e, saved_to_project: true } : e)) ?? prev)
+    markDeepDiveSaved(createClient(), deepDiveId).catch((err) => {
+      console.error('Failed to mark deep dive as saved:', err)
     })
   }, [])
 
@@ -369,6 +414,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ id: string;
                       <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink)', lineHeight: 1.5 }}>{entry.prompt}</p>
                       <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <StatusChip status={displayRow.status} />
+                        {entry.saved_to_project && <SavedChip />}
                         <span className="mono" style={{ fontSize: 10, color: 'var(--ink-subtle)' }}>
                           {new Date(entry.created_at).toLocaleString()}
                         </span>
@@ -378,6 +424,14 @@ export default function DeepDivePage({ params }: { params: Promise<{ id: string;
                           </span>
                         )}
                       </div>
+                      {entry.status === 'done' && entry.result != null && (
+                        <DeepDiveResultView
+                          domain={domain}
+                          result={entry.result}
+                          projectId={project.id}
+                          onSaved={() => handleDeepDiveSaved(entry.id)}
+                        />
+                      )}
                     </SectionCard>
                   )
                 })}

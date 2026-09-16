@@ -213,3 +213,17 @@ export async function markDeepDiveError(supabase: SupabaseClient, id: string): P
   const { error } = await supabase.from('project_deep_dives').update({ status: 'error' }).eq('id', id)
   if (error) throw error
 }
+
+// Phase 4 (plans/active/project-deep-dives/04-save-to-project.md): records
+// that at least one fact from this row's result has been saved into the
+// owning project's accumulated context (lib/projects/data.ts's
+// appendProjectContextFacts), so the history view can show which runs
+// already contributed without re-deriving that from the project's own
+// keyFacts array — keyFacts carries no provenance back to the row that
+// produced a given fact, and a fact later removed there must NOT flip this
+// back to false (it records that a save happened, not that the fact still
+// exists). Same RLS-backed direct-write pattern as markDeepDiveError above.
+export async function markDeepDiveSaved(supabase: SupabaseClient, id: string): Promise<void> {
+  const { error } = await supabase.from('project_deep_dives').update({ saved_to_project: true }).eq('id', id)
+  if (error) throw error
+}

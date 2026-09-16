@@ -14,9 +14,17 @@ import { appendProjectContextFacts } from '@/lib/projects/data'
 export function SaveFactsToProjectButton({
   projectId,
   facts,
+  onSaved,
 }: {
   projectId: string
   facts: string[]
+  // Optional (Phase 4, plans/active/project-deep-dives/04-save-to-project.md):
+  // fires right after appendProjectContextFacts resolves, so a caller that
+  // needs to know "the save happened" (a Deep Dive result marking its own
+  // source row saved_to_project) can react without this component knowing
+  // anything about who's calling it. Every pre-existing caller (ReviewLayer,
+  // ReasoningConclusionSuggestion) omits it and keeps working unchanged.
+  onSaved?: () => void
 }) {
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
@@ -29,6 +37,7 @@ export function SaveFactsToProjectButton({
     setState('saving')
     try {
       await appendProjectContextFacts(createClient(), projectId, facts)
+      onSaved?.()
       setState('saved')
     } catch {
       setState('error')
