@@ -17,10 +17,17 @@
 // every caller regardless of which wrapper reaches it), so this is not a
 // different search path — just skipping a wrapper that would have thrown
 // away the one thing this call needs back.
+//
+// Also extends Research Mode's query-DERIVATION step (see
+// runDeepDiveResearchGenerate below), added after this shipped without one:
+// a founder's `prompt` here is a natural-language ask directed at the AI,
+// not a search-engine query, and Brave reliably returns zero results for an
+// instruction-shaped string — confirmed live, not hypothetical.
 
 import { z } from 'zod'
 import { completeJSON } from '@/lib/ai/router'
 import { braveSearch } from '@/lib/ai/brave'
+import { PERSONA, QUERY_BLOCK } from '@/lib/ai/prompts'
 import { appendRegenerationFeedback, appendMasterGuidance } from './prompts'
 import type { ReviewPanelVerdict, MasterReviewGuidance } from './contracts'
 
@@ -45,6 +52,8 @@ export type DeepDiveResearchCandidate = z.infer<typeof DeepDiveResearchCandidate
 const DeepDiveResearchModelSchema = z.object({
   candidates: z.array(DeepDiveResearchCandidateSchema).max(8),
 })
+
+const QuerySchema = z.object({ query: z.string() })
 
 const DEEP_DIVE_RESEARCH_SYSTEM = `You are generating a Research Deep Dive for a Houses of Thought Founder Mode project — a focused, panel-reviewed writeup answering one specific research prompt the founder typed, grounded in real web search results and this project's own accumulated context.
 
@@ -73,20 +82,36 @@ export async function runDeepDiveResearchGenerate(
   repair?: { priorArtifact: DeepDiveResearchCandidate[]; priorVerdict: ReviewPanelVerdict },
   masterGuidance?: { priorArtifact: DeepDiveResearchCandidate[]; guidance: MasterReviewGuidance }
 ): Promise<DeepDiveResearchCandidate[]> {
-  // Same query every attempt (no query-derivation step — the founder typed
-  // an explicit prompt, decision 022 Phase 2's own brief) — so regeneration
-  // re-searches the identical query rather than reusing a cached result set.
-  // Brave results for a fixed query are effectively stable run-to-run, and a
-  // fresh search keeps this call self-contained (no extra persisted state
-  // needed just to cache a search that's cheap and already globally
-  // rate-limited by lib/ai/brave.ts) — the cost of one extra Brave call per
-  // regeneration attempt (at most 3 over a run's lifetime) is negligible
-  // next to the AI calls it accompanies.
-  const results = await braveSearch(prompt, 6)
+  // Query derivation (added after a live failure, 2026-09-15): the founder's
+  // `prompt` is a natural-language ask directed at the AI ("give evidence
+  // for X"), not a search-engine query — sending it to Brave verbatim
+  // reliably returns ZERO results for anything phrased as an instruction
+  // rather than a bare topic (confirmed live: a real founder prompt asking
+  // for debate evidence on a ballot proposition returned 0 Brave hits
+  // as-is, so every candidate got filtered to an empty list and the review
+  // panel correctly failed all 9 standards against nothing, every attempt).
+  // Research Mode's own inline route (app/api/ai/research/route.ts) already
+  // solves this with a cheap query-derivation call — reused here rather than
+  // reinvented, same PERSONA/QUERY_BLOCK. Re-derived fresh each attempt
+  // (not persisted/cached) — matches Research Mode's own behavior, and a
+  // 'coach'-role/'low'-effort call is cheap next to the generation call it
+  // precedes.
+  const derived = await completeJSON({
+    role: 'coach',
+    system: `${PERSONA}\n\n${QUERY_BLOCK}`,
+    user: contextText ? `${prompt}\n\nProject context:\n${contextText}` : prompt,
+    schema: QuerySchema,
+    schemaName: 'deep_dive_search_query',
+    effort: 'low',
+    maxTokens: 200,
+  })
+  const searchQuery = derived.query.trim() || prompt
+  const results = await braveSearch(searchQuery, 6)
 
   const baseContext =
     `## Project context\n${contextText || '(none yet)'}\n\n` +
     `## Research prompt\n${prompt}\n\n` +
+    `## Search query used\n${searchQuery}\n\n` +
     `## Search results\n${results.length ? formatResults(results) : '(no results found)'}`
 
   const isRepair = !!repair || !!masterGuidance
