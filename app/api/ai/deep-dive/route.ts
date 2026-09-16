@@ -23,23 +23,78 @@
 // master_guidance) is already sitting on the row itself (migration 0052),
 // so the request body is just the row's id.
 //
-// Only the 'research' domain has a generation engine wired up this phase
-// (decision 022 Phase 2's own brief) — Perspectives/Assumptions/Implications
-// are Phase 3. A request for any other domain fails clearly and immediately,
-// before any AI call, rather than reaching a missing-criteria crash deeper
-// in the panel.
+// All four domains have a generation engine wired up as of Phase 3
+// (plans/active/project-deep-dives/03-remaining-domains.md) —
+// runDeepDiveGenerate below is the one per-domain dispatch every 'generate'/
+// 'regenerate'/'master-regenerate' call site goes through; the state machine
+// itself (nextDeepDiveAction) and the review/master-review branches were
+// already domain-generic in Phase 2 and are unchanged here.
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { AiError } from '@/lib/ai/router'
 import { createClient } from '@/lib/supabase/server'
 import { getProject, formatProjectContextLines } from '@/lib/projects/data'
-import { getDeepDive, nextDeepDiveAction, type DeepDiveRow } from '@/lib/projects/deepDives'
+import { getDeepDive, nextDeepDiveAction, type DeepDiveDomain, type DeepDiveRow } from '@/lib/projects/deepDives'
 import { criteriaForDeepDiveDomain } from '@/lib/ai/reasoning/deep-dive-standards'
 import { runReviewPanelWithCriteria, runMasterReview } from '@/lib/ai/reasoning/orchestrator-panel'
 import { runDeepDiveResearchGenerate, type DeepDiveResearchCandidate } from '@/lib/ai/reasoning/deep-dive-research'
+import { runDeepDivePerspectivesGenerate, type DeepDiveStandpoint } from '@/lib/ai/reasoning/deep-dive-perspectives'
+import { runDeepDiveAssumptionsGenerate, type DeepDiveAssumption } from '@/lib/ai/reasoning/deep-dive-assumptions'
+import { runDeepDiveImplicationsGenerate, type DeepDiveImplicationItem } from '@/lib/ai/reasoning/deep-dive-implications'
+import type { ReviewPanelVerdict, MasterReviewGuidance } from '@/lib/ai/reasoning/contracts'
 import { MASTER_REVIEW_ATTEMPT } from '@/lib/ai/reasoning/budget'
 import { log } from '@/lib/log'
+
+// Dispatches to the one domain-specific generation module actually wired for
+// `domain` — the only research-specific thing about the three 'generate'/
+// 'regenerate'/'master-regenerate' call sites below before this phase. Every
+// domain's runDeepDive<X>Generate function shares the same (prompt,
+// contextText, repair?, masterGuidance?) shape (see each module's own header
+// comment), differing only in which artifact array type it takes/returns —
+// so this is a plain switch, not a registry — each case casts row.draft (and
+// the repair/masterGuidance priorArtifact riding on it) to that one domain's
+// own type before forwarding, the same cast every one of these call sites
+// already needed pre-Phase-3 (row.draft is untyped jsonb, DeepDiveRow's own
+// `unknown | null`).
+function runDeepDiveGenerate(
+  domain: DeepDiveDomain,
+  prompt: string,
+  contextText: string,
+  repair?: { priorArtifact: unknown; priorVerdict: ReviewPanelVerdict },
+  masterGuidance?: { priorArtifact: unknown; guidance: MasterReviewGuidance }
+): Promise<unknown[]> {
+  switch (domain) {
+    case 'research':
+      return runDeepDiveResearchGenerate(
+        prompt,
+        contextText,
+        repair && { priorArtifact: repair.priorArtifact as DeepDiveResearchCandidate[], priorVerdict: repair.priorVerdict },
+        masterGuidance && { priorArtifact: masterGuidance.priorArtifact as DeepDiveResearchCandidate[], guidance: masterGuidance.guidance }
+      )
+    case 'perspectives':
+      return runDeepDivePerspectivesGenerate(
+        prompt,
+        contextText,
+        repair && { priorArtifact: repair.priorArtifact as DeepDiveStandpoint[], priorVerdict: repair.priorVerdict },
+        masterGuidance && { priorArtifact: masterGuidance.priorArtifact as DeepDiveStandpoint[], guidance: masterGuidance.guidance }
+      )
+    case 'assumptions':
+      return runDeepDiveAssumptionsGenerate(
+        prompt,
+        contextText,
+        repair && { priorArtifact: repair.priorArtifact as DeepDiveAssumption[], priorVerdict: repair.priorVerdict },
+        masterGuidance && { priorArtifact: masterGuidance.priorArtifact as DeepDiveAssumption[], guidance: masterGuidance.guidance }
+      )
+    case 'implications':
+      return runDeepDiveImplicationsGenerate(
+        prompt,
+        contextText,
+        repair && { priorArtifact: repair.priorArtifact as DeepDiveImplicationItem[], priorVerdict: repair.priorVerdict },
+        masterGuidance && { priorArtifact: masterGuidance.priorArtifact as DeepDiveImplicationItem[], guidance: masterGuidance.guidance }
+      )
+  }
+}
 
 export const maxDuration = 60
 
@@ -84,16 +139,6 @@ export async function POST(req: Request): Promise<Response> {
   }
   if (!row) return NextResponse.json({ error: 'not-found' }, { status: 404 })
 
-  // Only 'research' has a generation engine wired up this phase — see this
-  // file's header comment. Phase 3 turns this into a per-domain dispatch;
-  // one hardcoded check is all a single implemented domain warrants today.
-  if (row.domain !== 'research') {
-    return NextResponse.json(
-      { error: 'domain-not-implemented', message: `Deep Dive generation for "${row.domain}" isn't implemented yet.` },
-      { status: 400 }
-    )
-  }
-
   const action = nextDeepDiveAction(row)
 
   // Already resolved (a client polling one extra time after 'done'/'error',
@@ -126,30 +171,32 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // Shared "what is this artifact for" text for both the reviewer panel and
-  // the master reviewer — the prompt, since that's the actual subject being
-  // graded, plus the same project context the generator saw.
+  // the master reviewer — the founder's own prompt, since that's the actual
+  // subject being graded, plus the same project context the generator saw.
+  // Domain-generic wording ("Prompt:", not "Research prompt:") now that all
+  // four domains flow through this same review/master-review path.
   const reviewContext = contextText
-    ? `Research prompt: ${row.prompt}\n\nProject context:\n${contextText}`
-    : `Research prompt: ${row.prompt}`
+    ? `Prompt: ${row.prompt}\n\nProject context:\n${contextText}`
+    : `Prompt: ${row.prompt}`
 
   try {
     switch (action) {
       case 'generate': {
-        const draft = await runDeepDiveResearchGenerate(row.prompt, contextText)
+        const draft = await runDeepDiveGenerate(row.domain, row.prompt, contextText)
         row = await patch(supabase, deepDiveId, { draft, verdict: null })
         break
       }
       case 'regenerate': {
-        const draft = await runDeepDiveResearchGenerate(row.prompt, contextText, {
-          priorArtifact: row.draft as DeepDiveResearchCandidate[],
+        const draft = await runDeepDiveGenerate(row.domain, row.prompt, contextText, {
+          priorArtifact: row.draft,
           priorVerdict: row.verdict!,
         })
         row = await patch(supabase, deepDiveId, { draft, verdict: null, attempt: row.attempt + 1 })
         break
       }
       case 'master-regenerate': {
-        const draft = await runDeepDiveResearchGenerate(row.prompt, contextText, undefined, {
-          priorArtifact: row.draft as DeepDiveResearchCandidate[],
+        const draft = await runDeepDiveGenerate(row.domain, row.prompt, contextText, undefined, {
+          priorArtifact: row.draft,
           guidance: row.master_guidance!,
         })
         row = await patch(supabase, deepDiveId, { draft, verdict: null, attempt: MASTER_REVIEW_ATTEMPT })
