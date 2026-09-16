@@ -5,10 +5,21 @@
 // parameterized route for all four domains (not four bespoke pages — plan
 // README's invariant 1). A prompt box inserts a `pending` project_deep_dives
 // row and the history list below shows every past run for this project +
-// domain. No generation yet — that's Phase 2, so `result` is always null and
-// every entry just sits at 'pending' for now.
+// domain.
+//
+// Phase 2 (plans/active/project-deep-dives/02-generation-engine.md) adds the
+// client side of the generate->review->regenerate->master-review loop:
+// app/api/ai/deep-dive/route.ts does exactly one unit of work per call and
+// returns, so THIS page is what turns repeated calls into what reads as one
+// continuous, unattended run — runDeepDive below fires the next POST itself
+// as soon as the previous one resolves, with no button the founder has to
+// click again, mirroring how the house pipeline's own rail auto-advances
+// (components/build/useReasoningPipelineRunner.ts) at a much smaller scale
+// (one subject, not a client-resent RunState). Also resumes any row still
+// sitting at 'pending' on mount, so navigating away mid-run and coming back
+// doesn't strand it forever with nothing left polling it.
 
-import { use, useCallback, useEffect, useState } from 'react'
+import { use, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -20,12 +31,25 @@ import {
   createDeepDive,
   listDeepDives,
   isDeepDiveDomain,
+  deepDiveStatusLabel,
+  markDeepDiveError,
   DEEP_DIVE_DOMAIN_META,
   type DeepDiveDomain,
   type DeepDiveRow,
   type DeepDiveStatus,
 } from '@/lib/projects/deepDives'
 import { SectionCard, FieldLabel, TextArea } from '@/components/profile/primitives'
+
+// Transient upstream hiccup (rate limit, timeout, malformed-output retries
+// exhausted, or a plain network exception) — worth a few automatic retries
+// before giving up, same spirit as useReasoningPipelineRunner.ts's own
+// RATE_LIMIT_RETRY_DELAYS_MS/TRANSIENT_ERROR_CODES, kept small and local
+// here rather than importing those (that hook's own constants aren't
+// exported, and this loop is simple enough — one subject, not an
+// n-perspective fan-out with sub-element tracking — not to need the same
+// machinery).
+const TRANSIENT_RETRY_DELAYS_MS = [3_000, 8_000, 20_000, 45_000]
+const TRANSIENT_ERROR_CODES = new Set(['ai-rate-limited', 'ai-upstream-error', 'ai-timeout', 'search-rate-limited', 'search-failed'])
 
 const statusLabel: Record<DeepDiveStatus, string> = {
   pending: 'Pending',
@@ -87,17 +111,110 @@ export default function DeepDivePage({ params }: { params: Promise<{ id: string;
   const [prompt, setPrompt] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The live, in-flight state of every row currently being polled, keyed by
+  // id — a map, not a single value, because nothing here stops a founder
+  // from starting a second Deep Dive prompt while an earlier one for the
+  // same domain is still generating (handleSubmit only guards the INSERT,
+  // not the run that follows it). Each entry in the history list below reads
+  // from this map when present, falling back to its own persisted row
+  // otherwise.
+  const [liveDeepDives, setLiveDeepDives] = useState<Record<string, DeepDiveRow>>({})
+  // Guards against starting two overlapping poll loops for the SAME row
+  // (e.g. React 18 dev-mode's double effect invocation, or a resume-on-mount
+  // racing a just-submitted run) — not a server-side lock, just cheap
+  // client-side de-duplication.
+  const activePollsRef = useRef<Set<string>>(new Set())
 
-  const loadEntries = useCallback(async (projectId: string, d: DeepDiveDomain) => {
+  const loadEntries = useCallback(async (projectId: string, d: DeepDiveDomain): Promise<DeepDiveRow[]> => {
     const supabase = createClient()
     try {
       const rows = await listDeepDives(supabase, projectId, d)
       setEntries(rows)
+      return rows
     } catch (err) {
       console.error('Failed to load deep dive history:', err)
       setEntries([])
+      return []
     }
   }, [])
+
+  const clearLive = useCallback((deepDiveId: string) => {
+    setLiveDeepDives((prev) => {
+      if (!(deepDiveId in prev)) return prev
+      const next = { ...prev }
+      delete next[deepDiveId]
+      return next
+    })
+  }, [])
+
+  // Drives one Deep Dive row's generate->review->regenerate->master-review
+  // loop to completion by calling app/api/ai/deep-dive/route.ts repeatedly —
+  // that route does exactly one unit of work per call and reports the row's
+  // fresh state back, which is enough to know whether to call again
+  // immediately (still 'pending'), stop (status flips to 'done'/'error'), or
+  // back off and retry (a transient upstream hiccup, not a real verdict).
+  const runDeepDive = useCallback(
+    async (deepDiveId: string, projectId: string, d: DeepDiveDomain) => {
+      if (activePollsRef.current.has(deepDiveId)) return
+      activePollsRef.current.add(deepDiveId)
+      let retries = 0
+      let gaveUp = false
+      try {
+        for (;;) {
+          let res: Response
+          try {
+            res = await fetch('/api/ai/deep-dive', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ deepDiveId }),
+            })
+          } catch {
+            if (retries >= TRANSIENT_RETRY_DELAYS_MS.length) {
+              gaveUp = true
+              break
+            }
+            await new Promise((resolve) => setTimeout(resolve, TRANSIENT_RETRY_DELAYS_MS[retries]))
+            retries += 1
+            continue
+          }
+          if (!res.ok) {
+            const body = (await res.json().catch(() => ({}))) as { error?: string }
+            const code = body.error ?? 'ai-upstream-error'
+            if (TRANSIENT_ERROR_CODES.has(code) && retries < TRANSIENT_RETRY_DELAYS_MS.length) {
+              await new Promise((resolve) => setTimeout(resolve, TRANSIENT_RETRY_DELAYS_MS[retries]))
+              retries += 1
+              continue
+            }
+            gaveUp = true
+            break
+          }
+          retries = 0
+          const data = (await res.json()) as { deepDive: DeepDiveRow }
+          setLiveDeepDives((prev) => ({ ...prev, [deepDiveId]: data.deepDive }))
+          if (data.deepDive.status !== 'pending') {
+            await loadEntries(projectId, d)
+            clearLive(deepDiveId)
+            return
+          }
+          // Still pending — fire the next unit of work immediately, no
+          // artificial delay, same as the house rail's own successful-step
+          // behavior.
+        }
+      } finally {
+        activePollsRef.current.delete(deepDiveId)
+      }
+      if (gaveUp) {
+        try {
+          await markDeepDiveError(createClient(), deepDiveId)
+        } catch (err) {
+          console.error('Failed to mark deep dive as failed:', err)
+        }
+        await loadEntries(projectId, d)
+        clearLive(deepDiveId)
+      }
+    },
+    [loadEntries, clearLive]
+  )
 
   useEffect(() => {
     if (!domain) return
@@ -107,12 +224,20 @@ export default function DeepDivePage({ params }: { params: Promise<{ id: string;
       const row = await getProject(supabase, id)
       if (!active) return
       setProject(row ?? undefined)
-      if (row) loadEntries(row.id, domain)
+      if (row) {
+        const rows = await loadEntries(row.id, domain)
+        if (!active) return
+        // Resume anything still 'pending' from an earlier visit — nothing
+        // else will ever call the route again for it otherwise.
+        for (const entry of rows) {
+          if (entry.status === 'pending') void runDeepDive(entry.id, row.id, domain)
+        }
+      }
     })()
     return () => {
       active = false
     }
-  }, [id, domain, loadEntries])
+  }, [id, domain, loadEntries, runDeepDive])
 
   async function handleSubmit() {
     if (!project || !domain) return
@@ -127,7 +252,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ id: string;
     setSubmitting(true)
     setError(null)
     try {
-      await createDeepDive(supabase, {
+      const created = await createDeepDive(supabase, {
         projectId: project.id,
         ownerId: authedUser.id,
         domain,
@@ -135,6 +260,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ id: string;
       })
       setPrompt('')
       await loadEntries(project.id, domain)
+      void runDeepDive(created.id, project.id, domain)
     } catch (err) {
       console.error('Failed to create deep dive:', err)
       setError('Could not start that Deep Dive. Please try again.')
@@ -220,9 +346,9 @@ export default function DeepDivePage({ params }: { params: Promise<{ id: string;
             </SectionCard>
           </div>
 
-          {/* History — Phase 1 only persists the prompt; every entry sits at
-              'pending' until Phase 2's generation engine exists to advance it
-              (no spinner/polling here — nothing to poll for yet). */}
+          {/* History — each entry's live progress (while app/api/ai/deep-dive
+              is actively polling it, Phase 2) comes from liveDeepDives;
+              otherwise it just shows its own last-persisted row. */}
           <div style={{ marginTop: 'clamp(28px, 4vw, 40px)' }}>
             <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(18px, 2.2vw, 22px)', letterSpacing: '-0.01em', color: 'var(--ink)' }}>
               History
@@ -235,17 +361,26 @@ export default function DeepDivePage({ params }: { params: Promise<{ id: string;
               </p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-                {entries.map((entry) => (
-                  <SectionCard key={entry.id}>
-                    <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink)', lineHeight: 1.5 }}>{entry.prompt}</p>
-                    <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <StatusChip status={entry.status} />
-                      <span className="mono" style={{ fontSize: 10, color: 'var(--ink-subtle)' }}>
-                        {new Date(entry.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                  </SectionCard>
-                ))}
+                {entries.map((entry) => {
+                  const live = liveDeepDives[entry.id]
+                  const displayRow = live ?? entry
+                  return (
+                    <SectionCard key={entry.id}>
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink)', lineHeight: 1.5 }}>{entry.prompt}</p>
+                      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <StatusChip status={displayRow.status} />
+                        <span className="mono" style={{ fontSize: 10, color: 'var(--ink-subtle)' }}>
+                          {new Date(entry.created_at).toLocaleString()}
+                        </span>
+                        {displayRow.status === 'pending' && (
+                          <span className="mono" style={{ fontSize: 10, color: 'var(--ink-subtle)' }}>
+                            {deepDiveStatusLabel(displayRow)}
+                          </span>
+                        )}
+                      </div>
+                    </SectionCard>
+                  )
+                })}
               </div>
             )}
           </div>

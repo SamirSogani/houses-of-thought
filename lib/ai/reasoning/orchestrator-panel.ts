@@ -12,6 +12,7 @@ import {
   SingleStandardVerdictSchema,
   ReviewPanelVerdictSchema,
   MasterReviewGuidanceSchema,
+  type StandardId,
   type ReviewPanelVerdict,
   type MasterReviewGuidance,
 } from './contracts'
@@ -77,9 +78,18 @@ function autoPassVerdict(subjectId: string): ReviewPanelVerdict {
 // A batch's wall-clock time is bounded by its slowest single completeJSON call
 // (~26s worst case), not the sum — see the Phase 1 plan for why this is safe
 // inside one 30s route invocation even nested n-deep at perspectives-review.
-export async function runReviewPanel(
+//
+// Extracted from runReviewPanel below (2026-09-15, decision 022 Phase 2,
+// plans/active/project-deep-dives/02-generation-engine.md) so a caller
+// outside the house pipeline's own fixed step sequence can gate through the
+// exact same panel logic without needing a ReviewGateStep — the Deep Dive
+// engine's `criteria` come from lib/ai/reasoning/deep-dive-standards.ts's
+// DEEP_DIVE_STANDARD_CRITERIA instead of LAYER_STANDARD_CRITERIA[stepId].
+// runReviewPanel (below) is now just this function pre-loaded with a
+// step's own criteria — every existing caller's behavior is unchanged.
+export async function runReviewPanelWithCriteria(
   subjectId: string,
-  stepId: ReviewGateStep,
+  criteria: Record<StandardId, string>,
   artifact: unknown,
   context: string,
   dryRun = false,
@@ -93,7 +103,6 @@ export async function runReviewPanel(
   if (dryRun) return dryRunVerdict(subjectId)
   if (panelsOff) return autoPassVerdict(subjectId)
 
-  const criteria = LAYER_STANDARD_CRITERIA[stepId]
   const entries = await Promise.all(
     STANDARDS.map(async (standard, i) => {
       if (i > 0) await new Promise((resolve) => setTimeout(resolve, i * REVIEWER_STAGGER_MS))
@@ -144,7 +153,6 @@ export async function runReviewPanel(
         return [standard.id, verdict] as const
       } catch (err) {
         log.error('ai/reasoning/panel', 'standard reviewer call failed', {
-          stepId,
           subjectId,
           standard: standard.id,
           error: (err as Error)?.message,
@@ -160,8 +168,32 @@ export async function runReviewPanel(
   // Defensive: catches a shape bug here rather than surfacing downstream.
   ReviewPanelVerdictSchema.parse(result)
 
-  log.info('ai/reasoning/panel', 'panel verdict', { stepId, subjectId, overall_pass, failing, tolerated: MAX_PANEL_FAILURES })
+  log.info('ai/reasoning/panel', 'panel verdict', { subjectId, overall_pass, failing, tolerated: MAX_PANEL_FAILURES })
   return result
+}
+
+// The house pipeline's own entry point — unchanged signature/behavior for
+// every existing caller (orchestrator-global.ts, orchestrator-setup.ts,
+// orchestrator-perspectives.ts). Just looks up this step's own criteria and
+// delegates to runReviewPanelWithCriteria above.
+export async function runReviewPanel(
+  subjectId: string,
+  stepId: ReviewGateStep,
+  artifact: unknown,
+  context: string,
+  dryRun = false,
+  panelsOff = false,
+  siblingPerspectiveLabels?: string[]
+): Promise<ReviewPanelVerdict> {
+  return runReviewPanelWithCriteria(
+    subjectId,
+    LAYER_STANDARD_CRITERIA[stepId],
+    artifact,
+    context,
+    dryRun,
+    panelsOff,
+    siblingPerspectiveLabels
+  )
 }
 
 // Master-review arbitration (contracts.ts's MasterReviewGuidance, prompts.ts's

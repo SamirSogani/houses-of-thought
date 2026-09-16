@@ -5,7 +5,25 @@
 -- scoped to a project and a fixed domain. RLS mirrors projects (decision
 -- 021) — owner_id = auth.uid(), no cross-project/cross-user visibility.
 -- Idempotent.
-
+--
+-- attempt/draft/verdict/master_guidance added in Phase 2
+-- (plans/active/project-deep-dives/02-generation-engine.md) — this
+-- migration had NOT been applied anywhere yet at that point (see
+-- supabase/migrations/README.md's own row for it), so these are folded
+-- directly into the table's own create statement rather than a separate
+-- patch migration, plus a defensive ADD COLUMN IF NOT EXISTS below in case
+-- some environment ever runs an older copy of this same file number first.
+-- Together they let app/api/ai/deep-dive/route.ts resume a run's
+-- generate/review/regenerate/master-review loop correctly across the many
+-- separate HTTP requests that loop is actually made of (one route call = one
+-- unit of work, Vercel Hobby's real ~60s-per-request ceiling) without any
+-- extra state: attempt is the current draft's attempt number (1..
+-- MASTER_REVIEW_ATTEMPT, lib/ai/reasoning/budget.ts), draft is the latest
+-- generated artifact awaiting review, verdict is that draft's review-panel
+-- result once reviewed, and master_guidance is set once (and only once) the
+-- bounded regeneration loop escalates to a master-reviewer synthesis for the
+-- one final attempt it earns — see lib/projects/deepDives.ts's
+-- nextDeepDiveAction for the full state machine these four fields encode.
 create table if not exists public.project_deep_dives (
   id               uuid primary key default gen_random_uuid(),
   project_id       uuid not null references public.projects(id) on delete cascade,
@@ -15,9 +33,20 @@ create table if not exists public.project_deep_dives (
   status           text not null default 'pending' check (status in ('pending', 'done', 'error')),
   result           jsonb,
   saved_to_project boolean not null default false,
+  attempt          int not null default 1,
+  draft            jsonb,
+  verdict          jsonb,
+  master_guidance  jsonb,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
+
+-- Defensive (see header comment) — a no-op the first time this file ever
+-- runs anywhere, since the create table above already defines these columns.
+alter table public.project_deep_dives add column if not exists attempt int not null default 1;
+alter table public.project_deep_dives add column if not exists draft jsonb;
+alter table public.project_deep_dives add column if not exists verdict jsonb;
+alter table public.project_deep_dives add column if not exists master_guidance jsonb;
 
 create index if not exists project_deep_dives_project_domain_idx
   on public.project_deep_dives (project_id, domain, created_at desc);
