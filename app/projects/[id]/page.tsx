@@ -284,6 +284,36 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </SectionCard>
           </div>
 
+          {/* Deep Dive tools (decision 022, plans/active/project-deep-dives):
+              four fixed, project-scoped entry points into one parameterized
+              engine — reachable here, independent of any single house.
+              Placed right after the project's own basic info (name/
+              description/status), ahead of Accumulating context/Documents/
+              Houses, after real feedback that burying it at the very bottom
+              of the page — below all three of those sections — made it
+              effectively undiscoverable. */}
+          <div style={{ marginTop: 'clamp(32px, 4vw, 48px)' }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(20px, 2.6vw, 26px)', letterSpacing: '-0.01em', color: 'var(--ink)' }}>
+              Deep Dive
+            </h2>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-mid)', marginTop: 6 }}>
+              One specific aspect of deep thinking about this project, without running a full house.
+            </p>
+
+            <div className="acct-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 16 }}>
+              {DEEP_DIVE_DOMAINS.map((domain) => {
+                const meta = DEEP_DIVE_DOMAIN_META[domain]
+                return (
+                  <Link key={domain} href={`/projects/${id}/deep-dive/${domain}`} style={{ display: 'block' }}>
+                    <SectionCard>
+                      <FieldLabel label={meta.label} helper={meta.description} />
+                    </SectionCard>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+
           {/* Accumulating context (Phase 3, decision 021): structured fields
               direct-edit here; keyFacts accumulate passively from a house's
               Review layer or the reasoning pipeline reaching a conclusion
@@ -377,31 +407,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             )}
           </div>
 
-          {/* Deep Dive tools (decision 022, plans/active/project-deep-dives):
-              four fixed, project-scoped entry points into one parameterized
-              engine — reachable here, independent of any single house. Phase
-              1 only wires the prompt box + history; generation is Phase 2. */}
-          <div style={{ marginTop: 'clamp(32px, 4vw, 48px)' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(20px, 2.6vw, 26px)', letterSpacing: '-0.01em', color: 'var(--ink)' }}>
-              Deep Dive
-            </h2>
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-mid)', marginTop: 6 }}>
-              One specific aspect of deep thinking about this project, without running a full house.
-            </p>
-
-            <div className="acct-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 16 }}>
-              {DEEP_DIVE_DOMAINS.map((domain) => {
-                const meta = DEEP_DIVE_DOMAIN_META[domain]
-                return (
-                  <Link key={domain} href={`/projects/${id}/deep-dive/${domain}`} style={{ display: 'block' }}>
-                    <SectionCard>
-                      <FieldLabel label={meta.label} helper={meta.description} />
-                    </SectionCard>
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
         </div>
       </main>
 
